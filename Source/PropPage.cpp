@@ -630,38 +630,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 	// Let the parent class handle the message.
 	return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
 }
-void CVRMainPPage::InitializeTooltips()
-{
-    m_ToolTip.Create(this);
-    m_ToolTip.Activate(TRUE);
-    m_ToolTip.SetMaxTipWidth(300); // Allow multi-line tooltips
-    
-    // Add tooltips for all controls
-    AddTooltip(IDC_CHECK1, IDS_TT_USE_D3D11);
-    AddTooltip(IDC_COMBO1, IDS_TT_TEXTURE_FORMAT);
-    AddTooltip(IDC_CHECK2, IDS_TT_SHOW_STATS);
-    AddTooltip(IDC_CHECK18, IDS_TT_HDR_PASSTHROUGH);
-    AddTooltip(IDC_COMBO9, IDS_TT_HDR_TONE_MAPPING);
-    AddTooltip(IDC_EDIT_DISPLAYMAX, IDS_TT_HDR_DISPLAY_NITS);
-    AddTooltip(IDC_SLIDER3, IDS_TT_DYNAMIC_RANGE);
-    AddTooltip(IDC_SLIDER4, IDS_TT_SHADOW_DETAIL);
-    AddTooltip(IDC_SLIDER5, IDS_TT_COLOR_VOLUME);
-    AddTooltip(IDC_SLIDER6, IDS_TT_SCENE_ADAPT);
-    AddTooltip(IDC_CHECK14, IDS_TT_CONVERT_SDR);
-    AddTooltip(IDC_SLIDER2, IDS_TT_SDR_NITS);
-    AddTooltip(IDC_CHECK6, IDS_TT_USE_DITHERING);
-    AddTooltip(IDC_CHECK11, IDS_TT_EXCLUSIVE_FS);
-    AddTooltip(IDC_CHECK15, IDS_TT_VBLANK);
-    AddTooltip(IDC_CHECK13, IDS_TT_FRAME_TIME);
-    AddTooltip(IDC_CHECK16, IDS_TT_REINIT_DISPLAY);
-}
-
-void CVRMainPPage::AddTooltip(int controlID, int stringID)
-{
-    CString tooltipText;
-    tooltipText.LoadString(stringID);
-    m_ToolTip.AddTool(GetDlgItem(controlID), tooltipText);
-}
 HRESULT CVRMainPPage::OnApplyChanges()
 {
 	// get value
@@ -745,13 +713,6 @@ void CVRMainPPage::UpdateHdrParameterDisplays()
     
     swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrSceneAdaptation);
     SetDlgItemTextW(IDC_EDIT_SCENE, buffer);
-}
-BOOL CVRMainPPage::PreTranslateMessage(MSG* pMsg)
-{
-    if (m_ToolTip.m_hWnd != NULL) {
-        m_ToolTip.RelayEvent(pMsg);
-    }
-    return CBasePropertyPage::PreTranslateMessage(pMsg);
 }
 HWND GetParentOwner(HWND hwnd)
 {
@@ -845,6 +806,5 @@ HRESULT CVRInfoPPage::OnActivate()
 	SetDlgItemTextW(IDC_EDIT1, strInfo.c_str());
 
 	OldControlProc = (WNDPROC)::SetWindowLongPtrW(::GetDlgItem(m_hWnd, IDC_EDIT1), GWLP_WNDPROC, (LONG_PTR)ControlProc);
-	InitializeTooltips();
 	return S_OK;
 }

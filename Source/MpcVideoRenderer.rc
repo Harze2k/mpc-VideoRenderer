@@ -212,25 +212,6 @@ STRINGTABLE
 BEGIN
     IDS_MAINPROPPAGE_TITLE  "Settings"
     IDS_INFOPROPPAGE_TITLE  "Information"
-    
-    // Tooltip strings
-    IDS_TT_USE_D3D11        "Enable Direct3D 11 for improved performance and HDR support"
-    IDS_TT_TEXTURE_FORMAT   "Select texture format - 10-bit for HDR content, 8-bit for standard content"
-    IDS_TT_SHOW_STATS       "Display real-time performance statistics overlay"
-    IDS_TT_HDR_PASSTHROUGH  "Prefer Dolby Vision metadata when available for better HDR experience"
-    IDS_TT_HDR_TONE_MAPPING "Select tone mapping algorithm:\n• Passthrough: Direct to display\n• Enhanced ACES: Advanced Dolby Vision processing\n• Reinhard/Hable/Mobius: Alternative algorithms"
-    IDS_TT_HDR_DISPLAY_NITS "Set your display's peak brightness in nits (100-10000)\nTypical values: 400 (standard), 1000 (HDR), 4000+ (premium)"
-    IDS_TT_DYNAMIC_RANGE    "Dynamic range compression (0.0-1.0)\nHigher values compress bright scenes more\nRecommended: 0.3-0.7 for most content"
-    IDS_TT_SHADOW_DETAIL    "Shadow detail enhancement (0.0-2.0)\nEnhances visibility in dark areas\nRecommended: 1.0-1.5 for movies"
-    IDS_TT_COLOR_VOLUME     "Color volume adaptation (0.0-1.0)\nAdapts wide color gamut to display capabilities\nRecommended: 0.7-0.9"
-    IDS_TT_SCENE_ADAPT      "Scene adaptation (0.0-1.0)\nDynamic adjustment based on scene brightness\nRecommended: 0.5-0.8"
-    IDS_TT_CONVERT_SDR      "Convert HDR content to SDR for standard displays"
-    IDS_TT_SDR_NITS         "Set SDR display brightness (80-300 nits)\nTypical: 100-120 for monitors, 80-100 for TVs"
-    IDS_TT_USE_DITHERING    "Apply dithering to reduce color banding\nRecommended: Enable for better quality"
-    IDS_TT_EXCLUSIVE_FS     "Use exclusive fullscreen mode for reduced input lag\nMay cause compatibility issues with some systems"
-    IDS_TT_VBLANK           "Wait for vertical blank before presentation\nReduces tearing but may increase latency"
-    IDS_TT_FRAME_TIME       "Adjust frame presentation timing for smoother playback"
-    IDS_TT_REINIT_DISPLAY   "Reinitialize graphics when changing displays\nFixes HDR issues when moving between monitors"
 END
 
 #endif    // English (United States) resources

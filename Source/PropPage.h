@@ -28,15 +28,11 @@ class __declspec(uuid("DA46D181-07D6-441D-B314-019AEB10148A"))
 	CVRMainPPage : public CBasePropertyPage, public CWindow
 {
 	CComQIPtr<IVideoRenderer> m_pVideoRenderer;
-
 	Settings_t m_SetsPP;
-
 	int m_oldSDRDisplayNits = SDR_NITS_DEF;
-
 public:
 	CVRMainPPage(LPUNKNOWN lpunk, HRESULT* phr);
 	~CVRMainPPage();
-
 private:
 	void SetControls();
 	void EnableControls();
@@ -45,10 +41,6 @@ private:
     float m_oldHdrColorVolumeAdaptation;
     float m_oldHdrSceneAdaptation;
 	void UpdateHdrParameterDisplays();
-	BOOL PreTranslateMessage(MSG* pMsg) override;
-	CToolTipCtrl m_ToolTip;
-    void InitializeTooltips();
-    void AddTooltip(int controlID, int stringID);
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;
