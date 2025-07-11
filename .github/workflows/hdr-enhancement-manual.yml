@@ -19,6 +19,8 @@ on:
 jobs:
   build:
     runs-on: windows-2022
+    # Only allow this to run on hdr-enhancement branch
+    if: github.ref == 'refs/heads/hdr-enhancement'
 
     steps:
       - name: Set TimeZone
@@ -56,10 +58,20 @@ jobs:
         run: |
           .\build_mpcvr.cmd NoWait
 
+      - name: Check build success
+        shell: pwsh
+        run: |
+          Write-Host "Checking for build outputs..."
+          if (!(Test-Path "_bin\Filter_x64\MpcVideoRenderer64.ax") -or !(Test-Path "_bin\Filter_x86\MpcVideoRenderer.ax")) {
+            Write-Error "Build failed - missing .ax files"
+            exit 1
+          }
+          Write-Host "✅ Build successful - found both 32-bit and 64-bit files"
+
       - name: Upload build logs
         uses: actions/upload-artifact@v4
         with:
-          name: "HDR-Enhancement-Build-Logs"
+          name: "HDR-Enhancement-Build-Logs-${{ github.run_number }}"
           path: _bin/logs/
           compression-level: 9
         continue-on-error: true
@@ -67,7 +79,7 @@ jobs:
       - name: Upload VideoRenderer binaries
         uses: actions/upload-artifact@v4
         with:
-          name: "HDR-Enhancement-Binaries"
+          name: "HDR-Enhancement-Binaries-${{ github.run_number }}"
           path: |
             _bin/**/*.ax
             _bin/**/*.zip
@@ -103,6 +115,7 @@ jobs:
             **Build Date**: $(date +"%Y-%m-%d %H:%M UTC")
             **Branch**: hdr-enhancement  
             **Triggered by**: @${{ github.actor }}
+            **Build #**: ${{ github.run_number }}
             
             ## 🎯 Enhanced HDR Features:
             - **Enhanced Dolby Vision ACES tone mapping** with dynamic range compression
@@ -118,6 +131,12 @@ jobs:
             - `HdrShadowDetail` (0.0-2.0, default: 1.2)
             - `HdrColorVolumeAdaptation` (0.0-1.0, default: 0.8) 
             - `HdrSceneAdaptation` (0.0-1.0, default: 0.6)
+            
+            ## 📋 Testing Instructions:
+            1. Install the .ax files using regsvr32 (run as admin)
+            2. Configure HDR parameters in registry if needed
+            3. Test with HDR10/Dolby Vision content
+            4. Report feedback on tone mapping quality
             
             ⚠️ **For Testing Only**: Experimental HDR enhancements
             
