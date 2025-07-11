@@ -45,6 +45,10 @@ private:
     float m_oldHdrColorVolumeAdaptation;
     float m_oldHdrSceneAdaptation;
 	void UpdateHdrParameterDisplays();
+	BOOL PreTranslateMessage(MSG* pMsg) override;
+	CToolTipCtrl m_ToolTip;
+    void InitializeTooltips();
+    void AddTooltip(int controlID, int stringID);
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;

@@ -148,6 +148,24 @@
 #define IDC_EDIT_SHADOW                 1103
 #define IDC_EDIT_COLORVOL               1104
 #define IDC_EDIT_SCENE                  1105
+// Tooltip string IDs
+#define IDS_TT_USE_D3D11                1200
+#define IDS_TT_TEXTURE_FORMAT           1201
+#define IDS_TT_SHOW_STATS               1202
+#define IDS_TT_HDR_PASSTHROUGH          1203
+#define IDS_TT_HDR_TONE_MAPPING         1204
+#define IDS_TT_HDR_DISPLAY_NITS         1205
+#define IDS_TT_DYNAMIC_RANGE            1206
+#define IDS_TT_SHADOW_DETAIL            1207
+#define IDS_TT_COLOR_VOLUME             1208
+#define IDS_TT_SCENE_ADAPT              1209
+#define IDS_TT_CONVERT_SDR              1210
+#define IDS_TT_SDR_NITS                 1211
+#define IDS_TT_USE_DITHERING            1212
+#define IDS_TT_EXCLUSIVE_FS             1213
+#define IDS_TT_VBLANK                   1214
+#define IDS_TT_FRAME_TIME               1215
+#define IDS_TT_REINIT_DISPLAY           1216
 
 // Next default values for new objects
 // 
