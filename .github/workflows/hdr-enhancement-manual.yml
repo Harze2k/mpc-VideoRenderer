@@ -19,18 +19,18 @@ on:
 jobs:
   build:
     runs-on: windows-2022
-    # REMOVED: if: github.ref == 'refs/heads/hdr-enhancement'
 
     steps:
       - name: Verify correct branch
         shell: bash
         run: |
+          echo "Current branch: ${{ github.ref }}"
+          echo "Branch name: ${{ github.ref_name }}"
           if [ "${{ github.ref }}" != "refs/heads/hdr-enhancement" ]; then
-            echo "⚠️  Warning: This workflow is designed for hdr-enhancement branch"
-            echo "Current branch: ${{ github.ref }}"
+            echo "Warning: This workflow is designed for hdr-enhancement branch"
             echo "Continuing anyway..."
           else
-            echo "✅ Running on correct branch: hdr-enhancement"
+            echo "Running on correct branch: hdr-enhancement"
           fi
 
       - name: Set TimeZone
@@ -76,7 +76,7 @@ jobs:
             Write-Error "Build failed - missing .ax files"
             exit 1
           }
-          Write-Host "✅ Build successful - found both 32-bit and 64-bit files"
+          Write-Host "Build successful - found both 32-bit and 64-bit files"
 
       - name: Upload build logs
         uses: actions/upload-artifact@v4
@@ -122,10 +122,10 @@ jobs:
           body: |
             🧪 **HDR Enhancement Test Build**
             
-            **Build Date**: $(date +"%Y-%m-%d %H:%M UTC")
+            **Build Date**: ${{ steps.date.outputs.date }}
             **Branch**: ${{ github.ref_name }}
             **Triggered by**: @${{ github.actor }}
-            **Build #**: ${{ github.run_number }}
+            **Build Number**: ${{ github.run_number }}
             
             ## 🎯 Enhanced HDR Features:
             - **Enhanced Dolby Vision ACES tone mapping** with dynamic range compression
@@ -136,11 +136,11 @@ jobs:
             - **Registry-configurable parameters** for fine-tuning
             
             ## 🔧 New Registry Settings:
-            Location: `HKEY_CURRENT_USER\Software\MPC-BE Filters\MPC Video Renderer`
-            - `HdrDynamicRangeCompression` (0.0-1.0, default: 0.5)
-            - `HdrShadowDetail` (0.0-2.0, default: 1.2)
-            - `HdrColorVolumeAdaptation` (0.0-1.0, default: 0.8) 
-            - `HdrSceneAdaptation` (0.0-1.0, default: 0.6)
+            Location: HKEY_CURRENT_USER\Software\MPC-BE Filters\MPC Video Renderer
+            - HdrDynamicRangeCompression (0.0-1.0, default: 0.5)
+            - HdrShadowDetail (0.0-2.0, default: 1.2)
+            - HdrColorVolumeAdaptation (0.0-1.0, default: 0.8) 
+            - HdrSceneAdaptation (0.0-1.0, default: 0.6)
             
             ## 📋 Testing Instructions:
             1. Install the .ax files using regsvr32 (run as admin)
