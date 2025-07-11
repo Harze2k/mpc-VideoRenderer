@@ -1,3 +1,8 @@
+### Its a merge of https://github.com/Aleksoid1978/VideoRenderer and the latest HDR10 tonemapping implementation from: https://github.com/thefallentree/mpc-VideoRenderer ###
+
+- HDR10 metadata tonemapping support
+- HDR nits value saving fix
+
 ﻿# MPC Video Renderer
 
 MPC Video Renderer is a free and open-source video renderer for DirectShow. The renderer can potentially work with any DirectShow player, but full support is available only in the MPC-BE. Recommended MPC-BE 1.8.2.136 or newer.
@@ -32,15 +37,3 @@ MPC Video Renderer is a free and open-source video renderer for DirectShow. The 
 ## License
 
 MPC Video Renderer's code is licensed under [GPL v3].
-
-## Links
-
-[Nightly builds](https://github.com/Aleksoid1978/VideoRenderer/wiki/Nightly-builds)
-
-[Topic in MPC-BE forum (Russian)](https://mpc-be.org/forum/index.php?topic=381)
-
-[MPC-BE](https://github.com/Aleksoid1978/MPC-BE)
-
-## Donate
-
-<https://mpc-be.org/forum/index.php?topic=240>
