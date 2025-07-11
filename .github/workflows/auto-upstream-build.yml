@@ -1,81 +1,18 @@
-name: Auto Build on Upstream Release
+name: Auto Production Build
 
 on:
   schedule:
-    # Check every 6 hours for new releases
-    - cron: '0 */6 * * *'
-  workflow_dispatch: # Allow manual trigger
+    - cron: '0 */6 * * *'  # Every 6 hours
+  workflow_dispatch:
 
 jobs:
-  check-upstream-release:
-    runs-on: ubuntu-latest
-    outputs:
-      should_build: ${{ steps.check_release.outputs.should_build }}
-      release_tag: ${{ steps.check_release.outputs.release_tag }}
-      release_name: ${{ steps.check_release.outputs.release_name }}
-
-    steps:
-      - name: Check for new upstream release
-        id: check_release
-        shell: bash
-        run: |
-          # Get latest release from upstream VideoRenderer
-          UPSTREAM_RELEASE=$(curl -sSL https://api.github.com/repos/Aleksoid1978/VideoRenderer/releases/latest)
-          UPSTREAM_TAG=$(echo "$UPSTREAM_RELEASE" | jq -r '.tag_name')
-          UPSTREAM_NAME=$(echo "$UPSTREAM_RELEASE" | jq -r '.name')
-          
-          echo "Latest upstream release: $UPSTREAM_TAG"
-          
-          # Get our latest release
-          OUR_RELEASES=$(curl -sSL https://api.github.com/repos/${{ github.repository }}/releases)
-          OUR_LATEST_BODY=$(echo "$OUR_RELEASES" | jq -r '.[0].body // ""')
-          
-          # Check if our latest release mentions this upstream version
-          if echo "$OUR_LATEST_BODY" | grep -q "Upstream: $UPSTREAM_TAG"; then
-            echo "We already have a build for upstream $UPSTREAM_TAG"
-            echo "should_build=false" >> $GITHUB_OUTPUT
-          else
-            echo "New upstream release found: $UPSTREAM_TAG"
-            echo "should_build=true" >> $GITHUB_OUTPUT
-            echo "release_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
-            echo "release_name=$UPSTREAM_NAME" >> $GITHUB_OUTPUT
-          fi
-
   build:
     runs-on: windows-2022
-    needs: check-upstream-release
-    if: needs.check-upstream-release.outputs.should_build == 'true'
-
     steps:
-      - name: Set TimeZone
-        shell: pwsh
-        run: tzutil /s "UTC"
-
-      - name: Show system info
-        shell: pwsh
-        run: |
-          Get-CimInstance -ClassName Win32_Processor
-          systeminfo
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Update from upstream
-        shell: bash
-        run: |
-          # Add upstream remote if not exists
-          git remote add upstream https://github.com/Aleksoid1978/VideoRenderer.git || true
-          
-          # Fetch latest from upstream
-          git fetch upstream
-          
-          # Merge upstream changes
-          git merge upstream/master --no-edit || {
-            echo "Merge conflicts detected. Manual intervention required."
-            exit 1
-          }
 
       - name: Select Windows SDK 10.0.22621.0
         shell: pwsh
@@ -103,51 +40,27 @@ jobs:
         run: |
           .\build_mpcvr.cmd NoWait
 
-      - name: Upload build logs
+      - name: Upload Production Build
         uses: actions/upload-artifact@v4
-        if: always()
         with:
-          name: "VideoRenderer-Auto-Build-Logs"
-          path: _bin/logs/
+          name: "Production-Build"
+          path: |
+            _bin/**/*.ax
+            _bin/**/*.zip
           compression-level: 9
-        continue-on-error: true
 
-      - name: Generate release tag
-        shell: bash
-        run: |
-          TIMESTAMP=$(date +"%Y.%m.%d-%H%M")
-          echo "tag=auto-$TIMESTAMP" >> $GITHUB_ENV
-          echo "timestamp=$TIMESTAMP" >> $GITHUB_ENV
-
-      - name: Create Automatic Release
-        uses: softprops/action-gh-release@v2
+      - name: Create Production Release
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.tag }}
-          name: "Auto Build - Upstream ${{ needs.check-upstream-release.outputs.release_tag }}"
+          tag_name: production-$(date +"%Y.%m.%d-%H%M")
+          name: "Production Build $(date +"%Y.%m.%d-%H%M")"
           files: |
             _bin/**/*.ax
             _bin/**/*.zip
           body: |
-            🤖 **Automatic build triggered by new upstream release**
+            🏭 **Production Build**
             
-            **Upstream Release**: ${{ needs.check-upstream-release.outputs.release_name }}
-            **Upstream Tag**: ${{ needs.check-upstream-release.outputs.release_tag }}
-            **Build Date**: ${{ env.timestamp }}
-            
-            ## What's included:
-            - MpcVideoRenderer64.ax (64-bit DirectShow filter)
-            - MpcVideoRenderer.ax (32-bit DirectShow filter)  
-            - Installation packages
-            
-            ## Features:
-            - HDR10 metadata tonemapping support (from the excellent work of: https://github.com/thefallentree/mpc-VideoRenderer)
-            - HDR nits value saving fix (from the excellent work of: https://github.com/thefallentree/mpc-VideoRenderer)
-            - Latest upstream improvements from ${{ needs.check-upstream-release.outputs.release_tag }}
-            
-            ---
-            **Note**: This is an automated build. Please report any issues.
-            
-            Upstream: ${{ needs.check-upstream-release.outputs.release_tag }}
-            Built from commit: ${{ github.sha }}
+            Stable VideoRenderer build from master branch.
+            Built from: ${{ github.sha }}
