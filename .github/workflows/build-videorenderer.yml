@@ -43,15 +43,18 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z -o MSYS_MinGW-w64_GCC_1421_x86-x64.7z
           7z x MSYS_MinGW-w64_GCC_1421_x86-x64.7z -oC:\MSYS
 
-      - name: Fix hardcoded paths in project files
+      - name: Create build directories
         shell: pwsh
         run: |
-          # Fix any hardcoded paths in vcxproj files
-          Get-ChildItem -Recurse -Include "*.vcxproj", "*.props" | ForEach-Object {
-            (Get-Content $_.FullName) | 
-            ForEach-Object { $_ -replace "E:\\src\\mpc-video-render", "$PWD" } |
-            Set-Content $_.FullName
-          }
+          # Create required build directories
+          New-Item -ItemType Directory -Force -Path "_bin\shaders"
+          New-Item -ItemType Directory -Force -Path "_bin\lib"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Release_x86"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Release_x64"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Debug_x86"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Debug_x64"
+          New-Item -ItemType Directory -Force -Path "_bin\Filter_x86"
+          New-Item -ItemType Directory -Force -Path "_bin\Filter_x64"
 
       - name: Build VideoRenderer
         shell: pwsh
