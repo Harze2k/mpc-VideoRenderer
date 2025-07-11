@@ -1,4 +1,4 @@
-name: HDR Enhancement Manual Build
+name: HDR Manual Build
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ on:
         - 'true'
         - 'false'
       release_name:
-        description: 'Custom release name (optional)'
+        description: 'Custom release name'
         required: false
         default: ''
 
@@ -25,7 +25,7 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Select Windows SDK 10.0.22621.0
+      - name: Select Windows SDK
         shell: pwsh
         run: |
           (Get-Content .\platform.props) | ForEach-Object { $_ -replace ">10.0<", ">10.0.22621.0<" } | Set-Content .\platform.props
@@ -46,7 +46,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path "_bin\Filter_x86"
           New-Item -ItemType Directory -Force -Path "_bin\Filter_x64"
 
-      - name: Build VideoRenderer with HDR Enhancement
+      - name: Build HDR VideoRenderer
         shell: pwsh
         run: |
           .\build_mpcvr.cmd NoWait
@@ -54,19 +54,19 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: "HDR-Enhancement-Build"
+          name: "HDR-Build-${{ github.run_number }}"
           path: |
             _bin/**/*.ax
             _bin/**/*.zip
 
-      - name: Create HDR Release
+      - name: Create release
         if: github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: hdr-test-${{ github.run_number }}
-          name: ${{ github.event.inputs.release_name != '' && github.event.inputs.release_name || format('HDR Enhancement Test {0}', github.run_number) }}
+          name: ${{ github.event.inputs.release_name != '' && github.event.inputs.release_name || format('HDR Test {0}', github.run_number) }}
           files: |
             _bin/**/*.ax
             _bin/**/*.zip
@@ -74,12 +74,12 @@ jobs:
             HDR Enhancement Test Build
             
             Enhanced Dolby Vision ACES tone mapping with configurable parameters.
-            Registry location: HKEY_CURRENT_USER\Software\MPC-BE Filters\MPC Video Renderer
+            Registry: HKEY_CURRENT_USER\Software\MPC-BE Filters\MPC Video Renderer
             
-            New parameters:
-            - HdrDynamicRangeCompression (0.0-1.0, default: 0.5)
-            - HdrShadowDetail (0.0-2.0, default: 1.2)
-            - HdrColorVolumeAdaptation (0.0-1.0, default: 0.8)
-            - HdrSceneAdaptation (0.0-1.0, default: 0.6)
+            New HDR parameters:
+            - HdrDynamicRangeCompression (0.0-1.0, default 0.5)
+            - HdrShadowDetail (0.0-2.0, default 1.2)
+            - HdrColorVolumeAdaptation (0.0-1.0, default 0.8)
+            - HdrSceneAdaptation (0.0-1.0, default 0.6)
             
             Testing version with experimental HDR enhancements.
