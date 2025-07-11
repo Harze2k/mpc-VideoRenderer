@@ -1817,7 +1817,11 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
 				DLogIf(m_pPSHDR10ToneMapping, L"CDX11VideoProcessor::InitMediaType() m_pPSHDR10ToneMapping(type: '{}') created", m_iHdrLocalToneMappingType);
-				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0, m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
+				SetHDR10ShaderParams(0, 2000.0f, 2000.0f, 1000.0f, 2000.0f, 1, 
+                     m_fDynamicRangeCompression > 0 ? m_fDynamicRangeCompression : 0.5f, 
+                     m_fShadowDetail > 0 ? m_fShadowDetail : 1.2f, 
+                     m_fColorVolumeAdaptation > 0 ? m_fColorVolumeAdaptation : 0.8f, 
+                     m_fSceneAdaptation > 0 ? m_fSceneAdaptation : 0.6f);
 			}
 		}
 		else {
@@ -3264,7 +3268,11 @@ HRESULT CDX11VideoProcessor::GetCurentImage(long *pDIBImage)
 			if (m_bHdrLocalToneMapping)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
-				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0, m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
+				SetHDR10ShaderParams(0, 2000.0f, 2000.0f, 1000.0f, 2000.0f, 1, 
+                     m_fDynamicRangeCompression > 0 ? m_fDynamicRangeCompression : 0.5f, 
+                     m_fShadowDetail > 0 ? m_fShadowDetail : 1.2f, 
+                     m_fColorVolumeAdaptation > 0 ? m_fColorVolumeAdaptation : 0.8f, 
+                     m_fSceneAdaptation > 0 ? m_fSceneAdaptation : 0.6f);
 			}
 		} else {
 			m_bHdrPassthrough = false;
