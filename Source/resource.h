@@ -131,7 +131,22 @@
 #define IDC_COMBO9                      1066
 #define IDC_STATIC99                    1067
 #define IDF_PS_11_FIX_HDR10             1068
-#define IDC_STATIC100                   1068
+#define IDC_STATIC101                   1090
+#define IDC_STATIC102                   1091  
+#define IDC_STATIC103                   1092
+#define IDC_STATIC104                   1093
+#define IDC_STATIC105                   1094
+#define IDC_STATIC106                   1095
+#define IDC_STATIC107                   1096
+#define IDC_STATIC108                   1097
+#define IDC_SLIDER3                     1098
+#define IDC_SLIDER4                     1099
+#define IDC_SLIDER5                     1100
+#define IDC_SLIDER6                     1101
+#define IDC_EDIT_DRC                    1102
+#define IDC_EDIT_SHADOW                 1103
+#define IDC_EDIT_COLORVOL               1104
+#define IDC_EDIT_SCENE                  1105
 
 // Next default values for new objects
 // 

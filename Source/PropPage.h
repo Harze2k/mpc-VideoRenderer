@@ -40,7 +40,11 @@ public:
 private:
 	void SetControls();
 	void EnableControls();
-
+	float m_oldHdrDynamicRangeCompression;
+    float m_oldHdrShadowDetail;
+    float m_oldHdrColorVolumeAdaptation;
+    float m_oldHdrSceneAdaptation;
+	void UpdateHdrParameterDisplays();
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;

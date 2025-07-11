@@ -140,6 +140,26 @@ void CVRMainPPage::SetControls()
 	wchar_t buffer[32] = {};
 	swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
 	SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
+	// Enhanced HDR Parameters - Initialize sliders
+    SendDlgItemMessageW(IDC_SLIDER3, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+    SendDlgItemMessageW(IDC_SLIDER4, TBM_SETRANGE, 1, MAKELONG(0, 200));  // 0.0-2.0 range (0-200)  
+    SendDlgItemMessageW(IDC_SLIDER5, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+    SendDlgItemMessageW(IDC_SLIDER6, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+
+    // Set current values
+    SendDlgItemMessageW(IDC_SLIDER3, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrDynamicRangeCompression * 100));
+    SendDlgItemMessageW(IDC_SLIDER4, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrShadowDetail * 100));
+    SendDlgItemMessageW(IDC_SLIDER5, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrColorVolumeAdaptation * 100));
+    SendDlgItemMessageW(IDC_SLIDER6, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrSceneAdaptation * 100));
+
+    // Update edit boxes
+    UpdateHdrParameterDisplays();
+
+    // Store old values
+    m_oldHdrDynamicRangeCompression = m_SetsPP.fHdrDynamicRangeCompression;
+    m_oldHdrShadowDetail = m_SetsPP.fHdrShadowDetail;
+    m_oldHdrColorVolumeAdaptation = m_SetsPP.fHdrColorVolumeAdaptation;
+    m_oldHdrSceneAdaptation = m_SetsPP.fHdrSceneAdaptation;
 }
 
 void CVRMainPPage::EnableControls()
@@ -174,6 +194,21 @@ void CVRMainPPage::EnableControls()
 	GetDlgItem(IDC_SLIDER2).EnableWindow(m_SetsPP.bConvertToSdr);
 	
 	GetDlgItem(IDC_EDIT_DISPLAYMAX).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	    // ADD THIS NEW CODE AFTER THE ABOVE:
+    
+    GetDlgItem(IDC_STATIC101).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_STATIC102).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_STATIC103).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_STATIC104).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_STATIC105).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_SLIDER3).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_SLIDER4).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_SLIDER5).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_SLIDER6).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_EDIT_DRC).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_EDIT_SHADOW).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_EDIT_COLORVOL).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+    GetDlgItem(IDC_EDIT_SCENE).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
 }
 
 HRESULT CVRMainPPage::OnConnect(IUnknown *pUnk)
@@ -284,7 +319,7 @@ HRESULT CVRMainPPage::OnActivate()
 
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
-	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
+	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Enhanced ACES for Dolby Vision", 1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
@@ -532,6 +567,47 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 			}
 			return (LRESULT)1;
 		}
+			// ADD YOUR NEW SLIDERS HERE:
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER3)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER3, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrDynamicRangeCompression) > 0.01f) {
+				m_SetsPP.fHdrDynamicRangeCompression = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER4)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER4, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrShadowDetail) > 0.01f) {
+				m_SetsPP.fHdrShadowDetail = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER5)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER5, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrColorVolumeAdaptation) > 0.01f) {
+				m_SetsPP.fHdrColorVolumeAdaptation = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER6)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER6, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrSceneAdaptation) > 0.01f) {
+				m_SetsPP.fHdrSceneAdaptation = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
 		if ((HWND)lParam == GetDlgItem(IDC_SLIDER2)) {
 			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER2, TBM_GETPOS, 0, 0);
 			lValue *= SDR_NITS_STEP;
@@ -622,6 +698,22 @@ HRESULT CVRInfoPPage::OnDisconnect()
 	m_pVideoRenderer.Release();
 
 	return S_OK;
+}
+void CVRMainPPage::UpdateHdrParameterDisplays()
+{
+    wchar_t buffer[16];
+    
+    swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrDynamicRangeCompression);
+    SetDlgItemTextW(IDC_EDIT_DRC, buffer);
+    
+    swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrShadowDetail);
+    SetDlgItemTextW(IDC_EDIT_SHADOW, buffer);
+    
+    swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrColorVolumeAdaptation);
+    SetDlgItemTextW(IDC_EDIT_COLORVOL, buffer);
+    
+    swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrSceneAdaptation);
+    SetDlgItemTextW(IDC_EDIT_SCENE, buffer);
 }
 
 HWND GetParentOwner(HWND hwnd)
