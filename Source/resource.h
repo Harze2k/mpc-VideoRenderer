@@ -131,6 +131,7 @@
 #define IDC_COMBO9                      1066
 #define IDC_STATIC99                    1067
 #define IDF_PS_11_FIX_HDR10             1068
+#define IDC_STATIC100                   1088
 #define IDC_STATIC101                   1090
 #define IDC_STATIC102                   1091  
 #define IDC_STATIC103                   1092
@@ -154,7 +155,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        106
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1068
+#define *APS*NEXT_CONTROL_VALUE         1106
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif
