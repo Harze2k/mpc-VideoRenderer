@@ -259,24 +259,8 @@ CMpcVideoRenderer::CMpcVideoRenderer(LPUNKNOWN pUnk, HRESULT* phr)
 		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrDisplayNits, &value, &size)) {
 			m_Sets.fHdrDisplayMaxNits = discard<float>(value, HDR_NITS_DEF, HDR_NITS_MIN, HDR_NITS_MAX);
 		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_HdrToggleDisplay, dw)) {
-			m_Sets.iHdrToggleDisplay = discard<int>(dw, HDRTD_On, HDRTD_Disabled, HDRTD_OnOff);
-		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_HdrOsdBrightness, dw)) {
-			m_Sets.iHdrOsdBrightness = discard<int>(dw, 0, 0, 2);
-		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_ConvertToSdr, dw)) {
-			m_Sets.bConvertToSdr = !!dw;
-		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_DisplayNits, dw)) {
-			m_Sets.iSDRDisplayNits = discard<int>(dw, SDR_NITS_DEF, SDR_NITS_MIN, SDR_NITS_MAX);
-		}
-		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_DisplayNits, dw)) {
-			m_Sets.iSDRDisplayNits = discard<int>(dw, SDR_NITS_DEF, SDR_NITS_MIN, SDR_NITS_MAX);
-		}
-		// Enhanced Dolby Vision ACES parameters
-		float value = 0;
-		ULONG size = sizeof(value);
+
+		// Enhanced Dolby Vision ACES parameters - reuse existing variables
 		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrDynamicRangeCompression, &value, &size)) {
 			m_Sets.fHdrDynamicRangeCompression = discard<float>(value, 0.5f, 0.0f, 1.0f);
 		}

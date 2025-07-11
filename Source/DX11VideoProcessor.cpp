@@ -902,17 +902,27 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
 	}
 }
 
-void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType)
+void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation)
 {
 	if (masteringMinLuminanceNits <= 0) masteringMinLuminanceNits = 0;
 	if (masteringMaxLuminanceNits <= 0) masteringMaxLuminanceNits = 1000.0f;
 	if (maxCLL <= 0) maxCLL = 1000.0f;
 	if (maxFALL <= 0) maxFALL = maxCLL;
 	if (displayMaxNits < 0 || displayMaxNits > 10000.0) displayMaxNits = 1000.0f;
-	if (toneMappingType < 0 || toneMappingType > 4) toneMappingType = 1;
+	if (toneMappingType < 0 || toneMappingType > 7) toneMappingType = 1; // Updated range for new algorithms
+	
+	// Validate new Dolby Vision parameters
+	if (dynamicRangeCompression < 0.0f || dynamicRangeCompression > 1.0f) dynamicRangeCompression = 0.5f;
+	if (shadowDetail < 0.0f || shadowDetail > 2.0f) shadowDetail = 1.2f;
+	if (colorVolumeAdaptation < 0.0f || colorVolumeAdaptation > 1.0f) colorVolumeAdaptation = 0.8f;
+	if (sceneAdaptation < 0.0f || sceneAdaptation > 1.0f) sceneAdaptation = 0.6f;
 
-	// needs to be 16 byte aligned
-	FLOAT cbuffer[] = { masteringMinLuminanceNits, masteringMaxLuminanceNits, maxCLL, maxFALL, displayMaxNits, (float)toneMappingType, 0, 0 };
+	// Expanded 16-byte aligned buffer for enhanced parameters
+	FLOAT cbuffer[] = { 
+		masteringMinLuminanceNits, masteringMaxLuminanceNits, maxCLL, maxFALL, 
+		displayMaxNits, (float)toneMappingType, dynamicRangeCompression, shadowDetail,
+		colorVolumeAdaptation, sceneAdaptation, 0, 0  // 12 floats total, padded to 16-byte alignment
+	};
 
 	if (m_pHDR10ToneMappingConstants)
 	{
@@ -928,12 +938,11 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 		HRESULT result = m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_pHDR10ToneMappingConstants);
 		if (FAILED(result))
 		{
-			DLog(L"SetHDR10ShaderLuminanceParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", result);
+			DLog(L"SetHDR10ShaderParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", result);
 		}
 		EXECUTE_ASSERT(S_OK == result);
 	}
 }
-
 HRESULT CDX11VideoProcessor::SetShaderDoviCurvesPoly()
 {
 	ASSERT(m_Dovi.bValid);
