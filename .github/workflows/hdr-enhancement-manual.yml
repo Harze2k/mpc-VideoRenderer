@@ -19,10 +19,20 @@ on:
 jobs:
   build:
     runs-on: windows-2022
-    # Only allow this to run on hdr-enhancement branch
-    if: github.ref == 'refs/heads/hdr-enhancement'
+    # REMOVED: if: github.ref == 'refs/heads/hdr-enhancement'
 
     steps:
+      - name: Verify correct branch
+        shell: bash
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/hdr-enhancement" ]; then
+            echo "⚠️  Warning: This workflow is designed for hdr-enhancement branch"
+            echo "Current branch: ${{ github.ref }}"
+            echo "Continuing anyway..."
+          else
+            echo "✅ Running on correct branch: hdr-enhancement"
+          fi
+
       - name: Set TimeZone
         shell: pwsh
         run: tzutil /s "UTC"
@@ -113,7 +123,7 @@ jobs:
             🧪 **HDR Enhancement Test Build**
             
             **Build Date**: $(date +"%Y-%m-%d %H:%M UTC")
-            **Branch**: hdr-enhancement  
+            **Branch**: ${{ github.ref_name }}
             **Triggered by**: @${{ github.actor }}
             **Build #**: ${{ github.run_number }}
             
