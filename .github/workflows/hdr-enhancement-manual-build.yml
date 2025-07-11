@@ -25,6 +25,20 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Verify branch and commit
+        shell: pwsh
+        run: |
+          Write-Host "Current branch: $(git branch --show-current)"
+          Write-Host "Current commit: $(git rev-parse HEAD)"
+          Write-Host "Checking HDR shader file..."
+          if (Test-Path "Shaders\d3d11\ps_fix_hdr10.hlsl") {
+            Write-Host "✅ HDR shader file exists"
+            Write-Host "First 5 lines of shader:"
+            Get-Content "Shaders\d3d11\ps_fix_hdr10.hlsl" | Select-Object -First 5
+          } else {
+            Write-Host "❌ HDR shader file NOT found"
+          }
+
       - name: Select Windows SDK 10.0.22621.0
         shell: pwsh
         run: |
@@ -46,18 +60,42 @@ jobs:
           New-Item -ItemType Directory -Force -Path "_bin\Filter_x86"
           New-Item -ItemType Directory -Force -Path "_bin\Filter_x64"
 
-      - name: Build VideoRenderer with HDR Enhancement
+      - name: Build VideoRenderer with HDR Enhancement (with logging)
         shell: pwsh
         run: |
+          Write-Host "Starting build process..."
+          Write-Host "Build command: .\build_mpcvr.cmd NoWait"
           .\build_mpcvr.cmd NoWait
+          Write-Host "Build command completed with exit code: $LASTEXITCODE"
+
+      - name: Verify build output
+        shell: pwsh
+        run: |
+          Write-Host "Checking build outputs..."
+          Write-Host "=== Checking for .ax files ==="
+          Get-ChildItem -Path "_bin" -Recurse -Filter "*.ax" | ForEach-Object { 
+            Write-Host "Found: $($_.FullName) - Size: $($_.Length) bytes - Modified: $($_.LastWriteTime)"
+          }
+          Write-Host "=== Checking for .zip files ==="
+          Get-ChildItem -Path "_bin" -Recurse -Filter "*.zip" | ForEach-Object { 
+            Write-Host "Found: $($_.FullName) - Size: $($_.Length) bytes - Modified: $($_.LastWriteTime)"
+          }
+          Write-Host "=== Checking changelog ==="
+          if (Test-Path "changelog.txt") {
+            Write-Host "Changelog content:"
+            Get-Content "changelog.txt" | Select-Object -First 10
+          } else {
+            Write-Host "No changelog.txt found"
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: "HDR-Enhancement-Build"
+          name: "HDR-Enhancement-Build-Debug"
           path: |
             _bin/**/*.ax
             _bin/**/*.zip
+            changelog.txt
 
       - name: Create HDR Release
         if: github.event.inputs.create_release == 'true'
