@@ -66,6 +66,10 @@
 #define OPT_ConvertToSdr                   L"ConvertToSdr"
 #define OPT_UseD3DFullscreen               L"UseD3DFullscreen"
 #define OPT_DisplayNits                    L"DisplayNits"
+#define OPT_HdrDynamicRangeCompression     L"HdrDynamicRangeCompression"
+#define OPT_HdrShadowDetail                L"HdrShadowDetail"
+#define OPT_HdrColorVolumeAdaptation       L"HdrColorVolumeAdaptation"
+#define OPT_HdrSceneAdaptation             L"HdrSceneAdaptation"
 
 static std::atomic_int g_nInstance = 0;
 static const wchar_t g_szClassName[] = L"VRWindow";
@@ -266,6 +270,24 @@ CMpcVideoRenderer::CMpcVideoRenderer(LPUNKNOWN pUnk, HRESULT* phr)
 		}
 		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_DisplayNits, dw)) {
 			m_Sets.iSDRDisplayNits = discard<int>(dw, SDR_NITS_DEF, SDR_NITS_MIN, SDR_NITS_MAX);
+		}
+		if (ERROR_SUCCESS == key.QueryDWORDValue(OPT_DisplayNits, dw)) {
+			m_Sets.iSDRDisplayNits = discard<int>(dw, SDR_NITS_DEF, SDR_NITS_MIN, SDR_NITS_MAX);
+		}
+		// Enhanced Dolby Vision ACES parameters
+		float value = 0;
+		ULONG size = sizeof(value);
+		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrDynamicRangeCompression, &value, &size)) {
+			m_Sets.fHdrDynamicRangeCompression = discard<float>(value, 0.5f, 0.0f, 1.0f);
+		}
+		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrShadowDetail, &value, &size)) {
+			m_Sets.fHdrShadowDetail = discard<float>(value, 1.2f, 0.0f, 2.0f);
+		}
+		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrColorVolumeAdaptation, &value, &size)) {
+			m_Sets.fHdrColorVolumeAdaptation = discard<float>(value, 0.8f, 0.0f, 1.0f);
+		}
+		if (ERROR_SUCCESS == key.QueryBinaryValue(OPT_HdrSceneAdaptation, &value, &size)) {
+			m_Sets.fHdrSceneAdaptation = discard<float>(value, 0.6f, 0.0f, 1.0f);
 		}
 	}
 
@@ -1264,6 +1286,10 @@ STDMETHODIMP CMpcVideoRenderer::SaveSettings()
 		key.SetDWORDValue(OPT_HdrOsdBrightness,    m_Sets.iHdrOsdBrightness);
 		key.SetDWORDValue(OPT_ConvertToSdr,        m_Sets.bConvertToSdr);
 		key.SetDWORDValue(OPT_DisplayNits,         m_Sets.iSDRDisplayNits);
+		key.SetBinaryValue(OPT_HdrDynamicRangeCompression, &m_Sets.fHdrDynamicRangeCompression, sizeof(m_Sets.fHdrDynamicRangeCompression));
+		key.SetBinaryValue(OPT_HdrShadowDetail, &m_Sets.fHdrShadowDetail, sizeof(m_Sets.fHdrShadowDetail));
+		key.SetBinaryValue(OPT_HdrColorVolumeAdaptation, &m_Sets.fHdrColorVolumeAdaptation, sizeof(m_Sets.fHdrColorVolumeAdaptation));
+		key.SetBinaryValue(OPT_HdrSceneAdaptation, &m_Sets.fHdrSceneAdaptation, sizeof(m_Sets.fHdrSceneAdaptation));
 	}
 
 	return S_OK;

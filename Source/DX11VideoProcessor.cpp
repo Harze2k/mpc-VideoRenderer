@@ -1808,7 +1808,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
 				DLogIf(m_pPSHDR10ToneMapping, L"CDX11VideoProcessor::InitMediaType() m_pPSHDR10ToneMapping(type: '{}') created", m_iHdrLocalToneMappingType);
-				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0);
+				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0, m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
 			}
 		}
 		else {
@@ -2448,7 +2448,8 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 					SetHDR10ShaderParams(
 						m_hdr10.hdr10.MinMasteringLuminance / 10000.0, m_hdr10.hdr10.MaxMasteringLuminance, 
 						m_hdr10.hdr10.MaxContentLightLevel, m_hdr10.hdr10.MaxFrameAverageLightLevel,
-						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType, 
+						m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
 				}
 				m_lastHdr10 = m_hdr10;
 				UpdateStatsStatic();
@@ -2460,9 +2461,10 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 				} else if (m_bHdrLocalToneMapping)
 				{
 					SetHDR10ShaderParams(
-					m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance, 
+						m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance, 
 						m_lastHdr10.hdr10.MaxContentLightLevel, m_lastHdr10.hdr10.MaxFrameAverageLightLevel,
-						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType, 
+						m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
 				}
 			} else {
 				m_lastHdr10.bValid = true;
@@ -2484,9 +2486,10 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
                                 } else if (m_bHdrLocalToneMapping)
                                 {
                                         SetHDR10ShaderParams(
-                                                m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance,
-                                                m_lastHdr10.hdr10.MaxContentLightLevel, m_lastHdr10.hdr10.MaxFrameAverageLightLevel,
-                                                m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+											m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance, 
+											m_lastHdr10.hdr10.MaxContentLightLevel, m_lastHdr10.hdr10.MaxFrameAverageLightLevel,
+											m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType, 
+											m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
                                 }
 
 				UpdateStatsStatic();
@@ -2512,7 +2515,8 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 					SetHDR10ShaderParams(
 						m_hdr10.hdr10.MinMasteringLuminance / 10000.0, m_hdr10.hdr10.MaxMasteringLuminance, 
 						m_hdr10.hdr10.MaxContentLightLevel, m_hdr10.hdr10.MaxFrameAverageLightLevel,
-						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+						m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType, 
+						m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
 				}
 				m_lastHdr10 = m_hdr10;
 				UpdateStatsStatic();
@@ -3251,7 +3255,7 @@ HRESULT CDX11VideoProcessor::GetCurentImage(long *pDIBImage)
 			if (m_bHdrLocalToneMapping)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
-				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0);
+				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0, m_fDynamicRangeCompression, m_fShadowDetail, m_fColorVolumeAdaptation, m_fSceneAdaptation);
 			}
 		} else {
 			m_bHdrPassthrough = false;
@@ -3616,7 +3620,19 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
 		m_fHdrDisplayMaxNits = config.fHdrDisplayMaxNits;
 		changeHDR = true;
 	}
-
+	// Enhanced Dolby Vision ACES parameters
+	if (config.fHdrDynamicRangeCompression != m_fDynamicRangeCompression ||
+		config.fHdrShadowDetail != m_fShadowDetail ||
+		config.fHdrColorVolumeAdaptation != m_fColorVolumeAdaptation ||
+		config.fHdrSceneAdaptation != m_fSceneAdaptation) {
+		
+		m_fDynamicRangeCompression = config.fHdrDynamicRangeCompression;
+		m_fShadowDetail = config.fHdrShadowDetail;
+		m_fColorVolumeAdaptation = config.fHdrColorVolumeAdaptation;
+		m_fSceneAdaptation = config.fHdrSceneAdaptation;
+		
+		changeHDR = true;
+	}
 	if (config.iHdrToggleDisplay != m_iHdrToggleDisplay) {
 		if (config.iHdrToggleDisplay == HDRTD_Disabled || m_iHdrToggleDisplay == HDRTD_Disabled) {
 			changeHDR = true;

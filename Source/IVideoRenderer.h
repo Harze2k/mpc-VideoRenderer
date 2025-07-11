@@ -125,6 +125,10 @@ struct Settings_t {
 	bool bHdrLocalToneMapping;
 	int  iHdrLocalToneMappingType;
 	float fHdrDisplayMaxNits;
+	float fHdrDynamicRangeCompression = 0.5f;  // 0.0-1.0
+    float fHdrShadowDetail = 1.2f;             // 0.0-2.0  
+    float fHdrColorVolumeAdaptation = 0.8f;    // 0.0-1.0
+    float fHdrSceneAdaptation = 0.6f;          // 0.0-1.0
 
 	Settings_t() {
 		SetDefault();

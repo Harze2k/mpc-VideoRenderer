@@ -173,6 +173,12 @@ private:
 
 	std::map<std::wstring, bool> m_hdrModeSavedState;
 	std::map<std::wstring, bool, std::less<>> m_hdrModeStartState;
+	
+	// Enhanced Dolby Vision ACES parameters
+	float m_fDynamicRangeCompression = 0.5f;
+	float m_fShadowDetail = 1.2f;
+	float m_fColorVolumeAdaptation = 0.8f;
+	float m_fSceneAdaptation = 0.6f;
 
 	struct HDRMetadata {
 		DXGI_HDR_METADATA_HDR10 hdr10 = {};
@@ -214,7 +220,7 @@ private:
 	HRESULT CreatePShaderFromResource(ID3D11PixelShader** ppPixelShader, UINT resid);
 	void SetShaderConvertColorParams();
 	void SetShaderLuminanceParams();
-	void SetHDR10ShaderParams(float, float, float, float, float, int);
+	void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
 
 	HRESULT SetShaderDoviCurvesPoly();
 	HRESULT SetShaderDoviCurves();
