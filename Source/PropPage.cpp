@@ -135,7 +135,7 @@ void CVRMainPPage::SetControls()
 
 	if (!(m_SetsPP.fHdrDisplayMaxNits >= 1.0f && m_SetsPP.fHdrDisplayMaxNits <= 10000.0f))
 	{
-		m_SetsPP.fHdrDisplayMaxNits = 1000.0f;
+		m_SetsPP.fHdrDisplayMaxNits = 2000.0f;
 	}
 	wchar_t buffer[32] = {};
 	swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
@@ -319,7 +319,7 @@ HRESULT CVRMainPPage::OnActivate()
 
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
-	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Enhanced ACES for Dolby Vision", 1);
+	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES Enhanced", 1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);

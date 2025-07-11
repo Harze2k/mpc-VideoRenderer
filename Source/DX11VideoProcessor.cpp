@@ -905,10 +905,10 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
 void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation)
 {
 	if (masteringMinLuminanceNits <= 0) masteringMinLuminanceNits = 0;
-	if (masteringMaxLuminanceNits <= 0) masteringMaxLuminanceNits = 1000.0f;
-	if (maxCLL <= 0) maxCLL = 1000.0f;
+	if (masteringMaxLuminanceNits <= 0) masteringMaxLuminanceNits = 2000.0f;
+	if (maxCLL <= 0) maxCLL = 2000.0f;
 	if (maxFALL <= 0) maxFALL = maxCLL;
-	if (displayMaxNits < 0 || displayMaxNits > 10000.0) displayMaxNits = 1000.0f;
+	if (displayMaxNits < 0 || displayMaxNits > 10000.0) displayMaxNits = 2000.0f;
 	if (toneMappingType < 0 || toneMappingType > 7) toneMappingType = 1; // Updated range for new algorithms
 	
 	// Validate new Dolby Vision parameters

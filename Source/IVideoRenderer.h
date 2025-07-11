@@ -84,7 +84,7 @@ enum :int {
 #define SDR_NITS_MAX 400
 #define SDR_NITS_STEP  5
 
-#define HDR_NITS_DEF 1000.0f
+#define HDR_NITS_DEF 2000.0f
 #define HDR_NITS_MIN 1.0f
 #define HDR_NITS_MAX 10000.0f
 
@@ -167,12 +167,12 @@ struct Settings_t {
 			bHdrLocalToneMapping		= true;
 			bHdrPassthrough             = false;
 			iHdrLocalToneMappingType    = 1;
-			fHdrDisplayMaxNits			= 1000.0f;
+			fHdrDisplayMaxNits			= 2000.0f;
 		} else {
 			bHdrLocalToneMapping		= false;
 			bHdrPassthrough             = false;
 			iHdrLocalToneMappingType	= 0;
-			fHdrDisplayMaxNits			= 1000.0f;
+			fHdrDisplayMaxNits			= 2000.0f;
 		}
 		iHdrToggleDisplay               = HDRTD_Disabled;
 		bConvertToSdr                   = true;
