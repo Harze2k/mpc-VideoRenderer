@@ -1,0 +1,73 @@
+name: HDR Enhancement Manual Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create release'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+        - 'true'
+        - 'false'
+      release_name:
+        description: 'Custom release name (optional)'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: windows-2022
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Select Windows SDK 10.0.22621.0
+        shell: pwsh
+        run: |
+          (Get-Content .\platform.props) | ForEach-Object { $_ -replace ">10.0<", ">10.0.22621.0<" } | Set-Content .\platform.props
+
+      - name: Set up MSYS
+        shell: pwsh
+        run: |
+          curl -sSL https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z -o MSYS_MinGW-w64_GCC_1421_x86-x64.7z
+          7z x MSYS_MinGW-w64_GCC_1421_x86-x64.7z -oC:\MSYS
+
+      - name: Create build directories
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "_bin\shaders"
+          New-Item -ItemType Directory -Force -Path "_bin\lib"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Release_x86"
+          New-Item -ItemType Directory -Force -Path "_bin\lib\Release_x64"
+          New-Item -ItemType Directory -Force -Path "_bin\Filter_x86"
+          New-Item -ItemType Directory -Force -Path "_bin\Filter_x64"
+
+      - name: Build VideoRenderer with HDR Enhancement
+        shell: pwsh
+        run: |
+          .\build_mpcvr.cmd NoWait
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: "HDR-Enhancement-Build"
+          path: |
+            _bin/**/*.ax
+            _bin/**/*.zip
+
+      - name: Create HDR Release
+        if: github.event.inputs.create_release == 'true'
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: hdr-test-${{ github.run_number }}
+          name: "HDR Enhancement Test ${{ github.run_number }}"
+          files: |
+            _bin/**/*.ax
+            _bin/**/*.zip
+          body: "HDR Enhancement Test Build - Enhanced Dolby Vision ACES tone mapping with configurable parameters. Registry: HKEY_CURRENT_USER\\Software\\MPC-BE Filters\\MPC Video Renderer. New parameters: HdrDynamicRangeCompression (0.0-1.0, default 0.5), HdrShadowDetail (0.0-2.0, default 1.2), HdrColorVolumeAdaptation (0.0-1.0, default 0.8), HdrSceneAdaptation (0.0-1.0, default 0.6). Testing version with experimental HDR enhancements."
