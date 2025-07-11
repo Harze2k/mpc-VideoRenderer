@@ -59,8 +59,20 @@ IF /I "%SIGN%" == "True" (
 CALL :SubVSPath
 SET "TOOLSET=%VS_PATH%\Common7\Tools\vsdevcmd"
 
+REM Create all required directories
 SET "LOG_DIR=_bin\logs"
 IF NOT EXIST "%LOG_DIR%" MD "%LOG_DIR%"
+
+REM Create additional required directories for build
+IF NOT EXIST "_bin" MD "_bin"
+IF NOT EXIST "_bin\shaders" MD "_bin\shaders"
+IF NOT EXIST "_bin\lib" MD "_bin\lib"
+IF NOT EXIST "_bin\lib\Release_x86" MD "_bin\lib\Release_x86"
+IF NOT EXIST "_bin\lib\Release_x64" MD "_bin\lib\Release_x64"
+IF NOT EXIST "_bin\lib\Debug_x86" MD "_bin\lib\Debug_x86"
+IF NOT EXIST "_bin\lib\Debug_x64" MD "_bin\lib\Debug_x64"
+IF NOT EXIST "_bin\Filter_x86%SUFFIX%" MD "_bin\Filter_x86%SUFFIX%"
+IF NOT EXIST "_bin\Filter_x64%SUFFIX%" MD "_bin\Filter_x64%SUFFIX%"
 
 CALL "%TOOLSET%" -arch=x86
 REM again set the source directory (fix possible bug in VS2017)

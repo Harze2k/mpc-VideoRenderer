@@ -43,6 +43,16 @@ jobs:
           curl -sSL https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z -o MSYS_MinGW-w64_GCC_1421_x86-x64.7z
           7z x MSYS_MinGW-w64_GCC_1421_x86-x64.7z -oC:\MSYS
 
+      - name: Fix hardcoded paths in project files
+        shell: pwsh
+        run: |
+          # Fix any hardcoded paths in vcxproj files
+          Get-ChildItem -Recurse -Include "*.vcxproj", "*.props" | ForEach-Object {
+            (Get-Content $_.FullName) | 
+            ForEach-Object { $_ -replace "E:\\src\\mpc-video-render", "$PWD" } |
+            Set-Content $_.FullName
+          }
+
       - name: Build VideoRenderer
         shell: pwsh
         run: |
