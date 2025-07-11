@@ -1,4 +1,4 @@
-name: Manual Build
+name: Manual Build (Master)
 
 on:
   workflow_dispatch:
@@ -11,10 +11,6 @@ on:
         options:
         - 'true'
         - 'false'
-      release_name:
-        description: 'Custom release name (optional)'
-        required: false
-        default: ''
 
 jobs:
   build:
@@ -24,12 +20,6 @@ jobs:
       - name: Set TimeZone
         shell: pwsh
         run: tzutil /s "UTC"
-
-      - name: Show system info
-        shell: pwsh
-        run: |
-          Get-CimInstance -ClassName Win32_Processor
-          systeminfo
 
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -62,61 +52,28 @@ jobs:
         run: |
           .\build_mpcvr.cmd NoWait
 
-      - name: Upload build logs
+      - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
-          name: "VideoRenderer-Manual-Build-Logs"
-          path: _bin/logs/
-          compression-level: 9
-        continue-on-error: true
-
-      - name: Upload VideoRenderer binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: "VideoRenderer-Manual-Build-Binaries"
+          name: "Master-Manual-Build"
           path: |
             _bin/**/*.ax
             _bin/**/*.zip
           compression-level: 9
 
-      - name: Generate release info
-        if: github.event.inputs.create_release == 'true'
-        shell: bash
-        run: |
-          TIMESTAMP=$(date +"%Y.%m.%d-%H%M")
-          if [ -n "${{ github.event.inputs.release_name }}" ]; then
-            echo "tag=manual-$TIMESTAMP" >> $GITHUB_ENV
-            echo "release_name=${{ github.event.inputs.release_name }}" >> $GITHUB_ENV
-          else
-            echo "tag=manual-$TIMESTAMP" >> $GITHUB_ENV
-            echo "release_name=Manual Build $TIMESTAMP" >> $GITHUB_ENV
-          fi
-
-      - name: Create Manual Release
+      - name: Create Release
         if: github.event.inputs.create_release == 'true'
         uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.tag }}
-          name: ${{ env.release_name }}
+          tag_name: manual-$(date +"%Y.%m.%d-%H%M")
+          name: "Manual Build $(date +"%Y.%m.%d-%H%M")"
           files: |
             _bin/**/*.ax
             _bin/**/*.zip
           body: |
-            🛠️ **Manual build**
+            🛠️ **Manual Master Build**
             
-            **Build Date**: $(date +"%Y-%m-%d %H:%M UTC")
-            **Triggered by**: @${{ github.actor }}
-            
-            ## What's included:
-            - MpcVideoRenderer64.ax (64-bit DirectShow filter)
-            - MpcVideoRenderer.ax (32-bit DirectShow filter)
-            - Installation packages
-            
-            ## Features:
-            - HDR10 metadata tonemapping support (from the excellent work of: https://github.com/thefallentree/mpc-VideoRenderer)
-            - HDR nits value saving fix (from the excellent work of: https://github.com/thefallentree/mpc-VideoRenderer)
-            - Latest improvements and fixes
-            
-            Built from commit: ${{ github.sha }}
+            Standard VideoRenderer build from master branch.
+            Built from: ${{ github.sha }}
