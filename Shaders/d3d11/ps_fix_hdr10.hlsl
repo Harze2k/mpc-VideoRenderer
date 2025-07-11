@@ -16,14 +16,14 @@ cbuffer RootConstants : register(b0)
     float maxCLL;
     float maxFALL;
     float displayMaxNits;
-    uint selection; // Enhanced ACES = 1
-    
-    // Enhanced Dolby Vision specific parameters
-    float dynamicRangeCompression;  // 0.0-1.0, higher = more compression for bright scenes
-    float shadowDetail;             // 0.0-2.0, enhances shadow detail preservation  
-    float colorVolumeAdaptation;    // 0.0-1.0, adapts wide color gamut to display
-    float sceneAdaptation;          // 0.0-1.0, adapts to scene brightness changes
+    uint selection;
 };
+
+// Use fixed default values for enhanced parameters
+static const float dynamicRangeCompression = 0.5f;
+static const float shadowDetail = 1.2f;
+static const float colorVolumeAdaptation = 0.8f;
+static const float sceneAdaptation = 0.6f;
 
 // Rec.2020 color primaries and white point (for Dolby Vision)
 static const float3x3 REC2020_TO_XYZ = float3x3(
@@ -57,6 +57,11 @@ static const float3 ACES_LUMA = float3(0.2722287, 0.6740818, 0.0536895);
 
 // ✅ Enhanced ACES for Dolby Vision with Dynamic Adaptation
 float3 EnhancedACESForDolbyVision(float3 color) {
+	if (dynamicRangeCompression <= 0.0 && shadowDetail <= 0.0 && 
+			colorVolumeAdaptation <= 0.0 && sceneAdaptation <= 0.0) {
+			// Use basic ACES formula as fallback
+			return saturate((color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f));
+		}
     // Step 1: Calculate scene-relative luminance for adaptation
     float sceneLuma = dot(color, REC2020_LUMA);
     float normalizedLuma = sceneLuma / MasteringMaxLuminanceNits;
