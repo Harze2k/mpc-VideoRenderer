@@ -21,196 +21,192 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Verify branch and commit
+      - name: Verify Environment and Source
         run: |
+          Write-Host "--- Verifying Environment and Source ---" -ForegroundColor Yellow
           Write-Host "Current branch: $(git branch --show-current)"
           Write-Host "Current commit: $(git rev-parse HEAD)"
-          Write-Host "Checking HDR shader file..."
-          $shaderPaths = @(
-            "Shaders\d3d11\ps_fix_hdr10.hlsl",
-            "Source\Shaders\d3d11\ps_fix_hdr10.hlsl",
-            "shaders\d3d11\ps_fix_hdr10.hlsl",
-            "src\shaders\d3d11\ps_fix_hdr10.hlsl"
-          )
-          $found = $false
-          foreach ($path in $shaderPaths) {
-            if (Test-Path $path) {
-              Write-Host "HDR shader file found at: $path"
-              Write-Host "First 5 lines of shader:"
-              Get-Content $path | Select-Object -First 5
-              $found = $true
-              break
-            }
-          }
-          if (-not $found) {
-            Write-Host "HDR shader file NOT found in any expected location."
-            Get-ChildItem -Recurse -Filter "*.hlsl" | Select-Object -First 10
-          }
+          Write-Host "Runner OS: ${{ runner.os }}"
+          Write-Host "--------------------------------------"
 
       - name: Fix RC1004 Error - Add newlines and validate resource files
         run: |
-          Write-Host "Fixing potential RC1004 errors by ensuring proper file endings..."
-          Get-ChildItem -Recurse -Filter "resource.h" | ForEach-Object {
+          Write-Host "--- Validating and Fixing Resource Files ---" -ForegroundColor Yellow
+          Get-ChildItem -Recurse -Include "resource.h", "*.rc" | ForEach-Object {
             Write-Host "Checking file: $($_.FullName)"
-            $content = Get-Content $_.FullName -Raw
+            $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
             if ($content -and -not $content.EndsWith("`r`n")) {
-              Write-Host "Adding newline to: $($_.FullName)"
+              Write-Host "  -> Adding newline to: $($_.FullName)" -ForegroundColor Cyan
               Add-Content -Path $_.FullName -Value "`r`n"
-            }
-          }
-          Get-ChildItem -Recurse -Filter "*.rc" | ForEach-Object {
-            Write-Host "Checking RC file: $($_.FullName)"
-            $content = Get-Content $_.FullName -Raw
-            if ($content -and -not $content.EndsWith("`r`n")) {
-              Write-Host "Adding newline to: $($_.FullName)"
-              Add-Content -Path $_.FullName -Value "`r`n"
+            } else {
+              Write-Host "  -> File ending is OK."
             }
           }
           Get-ChildItem -Recurse -Filter "resource.h" | ForEach-Object {
-            Write-Host "Validating syntax in: $($_.FullName)"
-            $content = Get-Content $_.FullName
-            $lineCount = $content.Count
-            Write-Host "Total lines: $lineCount"
-            $ifCount = ($content | Select-String -Pattern "^\s*#if").Count
-            $endifCount = ($content | Select-String -Pattern "^\s*#endif").Count
-            Write-Host "#if directives: $ifCount, #endif directives: $endifCount"
+            $ifCount = (Get-Content $_.FullName | Select-String -Pattern "^\s*#if").Count
+            $endifCount = (Get-Content $_.FullName | Select-String -Pattern "^\s*#endif").Count
+            Write-Host "Validating directives in $($_.FullName): #if count is $ifCount, #endif count is $endifCount"
             if ($ifCount -ne $endifCount) {
-              Write-Host "WARNING: Unmatched preprocessor directives in $($_.FullName)"
+              Write-Warning "Unmatched preprocessor directives in $($_.FullName). This could cause compilation errors."
             }
           }
+          Write-Host "--------------------------------------------"
 
-      - name: Select Windows SDK 10.0.22621.0
+      - name: Set up MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Add MSBuild to PATH
         run: |
-          if (Test-Path ".\platform.props") {
-            Write-Host "Updating platform.props..."
-            (Get-Content .\platform.props) -replace ">10.0<", ">10.0.22621.0<" | Set-Content .\platform.props
-            Write-Host "Platform props updated"
-          } else {
-            Write-Host "platform.props not found, skipping SDK selection"
-          }
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\"
+          Write-Host "MSBuild added to PATH."
 
-      - name: Cache build dependencies
+      - name: Cache Build Dependencies
+        id: cache-deps
         uses: actions/cache@v4
         with:
           path: |
             external/
             _bin/lib/
           key: build-deps-${{ hashFiles('**/*.vcxproj', '**/*.props') }}
-          restore-keys: |
-            build-deps-
 
-      - name: Cache MSYS installation
+      - name: Cache MSYS Installation
+        id: cache-msys
         uses: actions/cache@v4
         with:
           path: C:\MSYS
-          key: msys-mingw-w64-gcc-1421-v2
-          restore-keys: |
-            msys-mingw-w64-gcc-1421-
+          key: msys-mingw-w64-gcc-1421-v3
 
       - name: Set up MSYS (if not cached)
         if: steps.cache-msys.outputs.cache-hit != 'true'
         run: |
-          Write-Host "MSYS not cached, downloading..."
+          Write-Host "--- MSYS Cache Miss - Downloading and Installing MSYS ---" -ForegroundColor Yellow
           try {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
-            Write-Host "MSYS downloaded successfully"
-            # Add the -y switch to automatically say "Yes" to all prompts.
-            7z x MSYS.7z -oC:\MSYS -y
+            Write-Host "MSYS downloaded. Extracting..."
+            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -oC:\MSYS -y
             Remove-Item MSYS.7z
-            Write-Host "MSYS extracted successfully"
+            Write-Host "MSYS extracted successfully." -ForegroundColor Green
           } catch {
-            Write-Host "Failed to download or extract MSYS: $($_.Exception.Message)"
+            Write-Error "Failed to download or extract MSYS: $($_.Exception.Message)"
             exit 1
           }
+          Write-Host "--------------------------------------------------------"
 
-      - name: Verify MSYS installation
+      - name: Verify MSYS Installation
         run: |
           if ('${{ steps.cache-msys.outputs.cache-hit }}' -eq 'true') {
-            Write-Host "MSYS restored from cache"
-          } else {
-            Write-Host "MSYS downloaded and installed"
+            Write-Host "MSYS restored from cache." -ForegroundColor Green
           }
-          if (-not (Test-Path "C:\MSYS")) {
-            Write-Host "MSYS directory not found!"
+          if (-not (Test-Path "C:\MSYS\mingw32.exe")) {
+            Write-Error "MSYS installation is corrupt or missing C:\MSYS\mingw32.exe"
             exit 1
           }
 
-      - name: Create build directories
+      - name: Create Build Directories
         run: |
-          $directories = @("_bin\shaders", "_bin\lib\Release_x86", "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
+          Write-Host "--- Creating Build Directories ---" -ForegroundColor Yellow
+          $directories = @("_bin\logs", "_bin\shaders", "_bin\lib\Release_x86", "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
           foreach ($dir in $directories) {
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            Write-Host "Created directory: $dir"
+            if (-not (Test-Path $dir)) {
+              New-Item -ItemType Directory -Force -Path $dir | Out-Null
+              Write-Host "Created directory: $dir"
+            }
           }
+          Write-Host "----------------------------------"
 
       - name: Build VideoRenderer with HDR Enhancement
         run: |
-          Write-Host "Starting build process..."
+          Write-Host "--- Starting Build ---" -ForegroundColor Yellow
           if (-not (Test-Path ".\build_mpcvr.cmd")) {
-            Write-Host "build_mpcvr.cmd not found!"
+            Write-Error "build_mpcvr.cmd not found in the root directory!"
             exit 1
           }
           
-          Write-Host "Build command: & '.\build_mpcvr.cmd' NoWait"
-          Write-Host "Build output will now be streamed in real-time below:"
-
-          & ".\build_mpcvr.cmd" NoWait
+          Write-Host "Executing: & '.\build_mpcvr.cmd' NoWait"
+          Write-Host "Build output will be streamed below and saved to _bin\logs\build_output.log"
+          
+          # Execute the build and stream output to console while also saving to a log file
+          & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath "_bin\logs\build_output.log"
           
           $buildExitCode = $LASTEXITCODE
-          Write-Host "Build command completed with exit code: $buildExitCode"
+          Write-Host "--------------------"
           
           if ($buildExitCode -ne 0) {
-            Write-Host "Build failed with exit code: $buildExitCode"
-            Get-ChildItem -Path "_bin\logs" -Filter "*.log" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "Checking log file: $($_.Name)"
-              $rcErrors = Get-Content $_.FullName -ErrorAction SilentlyContinue | Select-String -Pattern "RC\d{4}"
-              if ($rcErrors) {
-                Write-Host "Found RC errors in $($_.Name):"
-                $rcErrors | ForEach-Object { Write-Host "  $_" }
+            Write-Error "BUILD FAILED with exit code: $buildExitCode"
+            
+            # --- Detailed Error Analysis ---
+            Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor Yellow
+            $logFile = "_bin\logs\build_output.log"
+            if (Test-Path $logFile) {
+              $logContent = Get-Content $logFile
+              
+              $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
+              $warnings = $logContent | Select-String -Pattern "warning C\d{4}:" -AllMatches
+
+              if ($errors) {
+                Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
+                $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+              } else {
+                 Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
               }
+
+              if ($warnings) {
+                 Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
+                 $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+              }
+
+            } else {
+              Write-Warning "Build log file not found at $logFile"
             }
+            # --- End of Error Analysis ---
+            
             exit $buildExitCode
+          } else {
+            Write-Host "BUILD SUCCEEDED!" -ForegroundColor Green
           }
 
       - name: Verify build outputs
         run: |
-          Write-Host "Verifying build outputs..."
+          Write-Host "--- Verifying Build Outputs ---" -ForegroundColor Yellow
           $expectedFiles = @("_bin\Filter_x86\MpcVideoRenderer.ax", "_bin\Filter_x64\MpcVideoRenderer64.ax")
           $allFound = $true
           foreach ($file in $expectedFiles) {
             if (Test-Path $file) {
               $fileInfo = Get-Item $file
-              Write-Host "✓ Found: $file (Size: $([math]::Round($fileInfo.Length / 1KB, 2)) KB)"
+              Write-Host "✓ Found: $file (Size: $([math]::Round($fileInfo.Length / 1KB, 2)) KB)" -ForegroundColor Green
             } else {
-              Write-Host "✗ Missing: $file"
+              Write-Error "✗ Missing required build output: $file"
               $allFound = $false
             }
           }
           if (-not $allFound) {
-            Write-Host "Some expected files are missing!"
+            Write-Error "Build verification failed. Some expected files are missing."
             exit 1
           }
+          Write-Host "All build outputs verified successfully." -ForegroundColor Green
+          Write-Host "---------------------------------"
 
       - name: Upload build artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: mpc-videorenderer-hdr-${{ github.sha }}
+          name: mpc-videorenderer-hdr-build-${{ github.run_number }}
           path: |
             _bin/Filter_x86/MpcVideoRenderer.ax
             _bin/Filter_x64/MpcVideoRenderer64.ax
-          retention-days: 30
+            _bin/logs/build_output.log
+          retention-days: 7
 
-      - name: Create Release (on push to hdr-enhancement branch)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/hdr-enhancement'
+      - name: Create GitHub Release
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/hdr-enhancement'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: hdr-build-${{ github.run_number }}
           name: HDR Enhanced Build ${{ github.run_number }}
           body: |
             Automated build of MPC Video Renderer with HDR enhancements.
-            **Branch:** ${{ github.ref_name }}
-            **Commit:** ${{ github.sha }}
+            **Branch:** `${{ github.ref_name }}`
+            **Commit:** `${{ github.sha }}`
           files: |
             _bin/Filter_x86/MpcVideoRenderer.ax
             _bin/Filter_x64/MpcVideoRenderer64.ax
