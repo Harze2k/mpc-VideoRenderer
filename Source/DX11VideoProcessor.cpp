@@ -1,22 +1,22 @@
 /*
- * (C) 2018-2025 see Authors.txt
- *
- * This file is part of MPC-BE.
- *
- * MPC-BE is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * MPC-BE is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- *
- */
+*  2018-2025 see Authors.txt
+*
+* This file is part of MPC-BE.
+*
+* MPC-BE is free software; you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation; either version 3 of the License, or
+* (at your option) any later version.
+*
+* MPC-BE is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*
+*/
 
 #include "stdafx.h"
 #include <uuids.h>
@@ -2217,27 +2217,22 @@ HRESULT CDX11VideoProcessor::ResizeShaderPass(const Tex2D_t &Tex, ID3D11Texture2
 	{
 		w1 = srcRect.Height();
 		h1 = srcRect.Width();
-		resizerX = (w1 == w2) ? nullptr : (w1 > k * w2) ? m_pShaderDownscaleY.p
-														: m_pShaderUpscaleY.p; // use Y scaling here
+		resizerX = (w1 == w2) ? nullptr : (w1 > k * w2) ? m_pShaderDownscaleY.p : m_pShaderUpscaleY.p;
 		if (resizerX)
 		{
-			resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleY.p
-															: m_pShaderUpscaleY.p;
+			resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleY.p : m_pShaderUpscaleY.p;
 		}
 		else
 		{
-			resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleX.p
-															: m_pShaderUpscaleX.p; // use X scaling here
+			resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleX.p : m_pShaderUpscaleX.p;
 		}
 	}
 	else
 	{
 		w1 = srcRect.Width();
 		h1 = srcRect.Height();
-		resizerX = (w1 == w2) ? nullptr : (w1 > k * w2) ? m_pShaderDownscaleX.p
-														: m_pShaderUpscaleX.p;
-		resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleY.p
-														: m_pShaderUpscaleY.p;
+		resizerX = (w1 == w2) ? nullptr : (w1 > k * w2) ? m_pShaderDownscaleX.p	: m_pShaderUpscaleX.p;
+		resizerY = (h1 == h2) ? nullptr : (h1 > k * h2) ? m_pShaderDownscaleY.p	: m_pShaderUpscaleY.p;
 	}
 	if (resizerX && resizerY)
 	{
@@ -2870,6 +2865,7 @@ HRESULT CDX11VideoProcessor::GetVPInfo(std::wstring &str)
 			}
 		}
 	}
+#endif
 	return S_OK;
 }
 void CDX11VideoProcessor::Configure(const Settings_t &config)
@@ -3188,38 +3184,38 @@ void CDX11VideoProcessor::ClearPostScaleShaders()
 	m_pPostScaleShaders.clear();
 	DLog(L"CDX11VideoProcessor::ClearPostScaleShaders().");
 }
-HRESULT CDX11VideoProcessor::AddPreScaleShader(const std::wstring &name, const std::string &srcCode)
+HRESULT CDX11VideoProcessor::AddPreScaleShader(const std::wstring& name, const std::string& srcCode)
 {
 #ifdef _DEBUG
-	if (!m_pDevice)
-	{
+	if (!m_pDevice) {
 		return E_ABORT;
 	}
-	ID3DBlob *pShaderCode = nullptr;
+
+	ID3DBlob* pShaderCode = nullptr;
 	HRESULT hr = CompileShader(srcCode, nullptr, "ps_4_0", &pShaderCode);
-	if (S_OK == hr)
-	{
+	if (S_OK == hr) {
 		m_pPreScaleShaders.emplace_back();
 		hr = m_pDevice->CreatePixelShader(pShaderCode->GetBufferPointer(), pShaderCode->GetBufferSize(), nullptr, &m_pPreScaleShaders.back().shader);
-		if (S_OK == hr)
-		{
+		if (S_OK == hr) {
 			m_pPreScaleShaders.back().name = name;
-			// UpdatePreScaleTexures(); //TODO
+			//UpdatePreScaleTexures(); //TODO
 			DLog(L"CDX11VideoProcessor::AddPreScaleShader() : \"{}\" pixel shader added successfully.", name);
 		}
-		else
-		{
+		else {
 			DLog(L"CDX11VideoProcessor::AddPreScaleShader() : create pixel shader \"{}\" FAILED!", name);
 			m_pPreScaleShaders.pop_back();
 		}
 		pShaderCode->Release();
 	}
-	if (S_OK == hr && m_D3D11VP.IsReady() && m_bVPScaling)
-	{
+
+	if (S_OK == hr && m_D3D11VP.IsReady() && m_bVPScaling) {
 		return S_FALSE;
 	}
+
 	return hr;
-	// return E_NOTIMPL;
+#else
+	return E_NOTIMPL;
+#endif
 }
 HRESULT CDX11VideoProcessor::AddPostScaleShader(const std::wstring &name, const std::string &srcCode)
 {
@@ -3629,7 +3625,8 @@ void CDX11VideoProcessor::SetCallbackDevice()
 	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
 		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
 	}
-};
+}
+
 void CDX11VideoProcessor::UpdateSubPic()
 {
 	ASSERT(m_pDevice);
@@ -3644,4 +3641,4 @@ void CDX11VideoProcessor::UpdateSubPic()
 			m_pFilter->m_pSubPicQueue->SetSubPicProvider(m_pFilter->m_pSubPicProvider);
 		}
 	}
-};
+}
