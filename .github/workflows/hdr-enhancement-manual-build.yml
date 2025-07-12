@@ -1,21 +1,11 @@
-name: HDR Enhancement Manual Build
-
+name: Build MPC Video Renderer with HDR Enhancement
 on:
-  workflow_dispatch:
-    inputs:
-      create_release:
-        description: 'Create release'
-        required: false
-        default: 'true'
-        type: choice
-        options:
-        - 'true'
-        - 'false'
-      release_name:
-        description: 'Custom release name (optional)'
-        required: false
-        default: ''
-
+  push:
+    branches:
+      - hdr-enhancement
+  pull_request:
+    branches:
+      - hdr-enhancement
 jobs:
   build:
     runs-on: windows-2022
@@ -24,21 +14,17 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
       - name: Verify branch and commit
-        shell: pwsh
         run: |
           Write-Host "Current branch: $(git branch --show-current)"
           Write-Host "Current commit: $(git rev-parse HEAD)"
           Write-Host "Checking HDR shader file..."
-          
           $shaderPaths = @(
             "Shaders\d3d11\ps_fix_hdr10.hlsl",
             "Source\Shaders\d3d11\ps_fix_hdr10.hlsl", 
             "shaders\d3d11\ps_fix_hdr10.hlsl",
             "src\shaders\d3d11\ps_fix_hdr10.hlsl"
           )
-          
           $found = $false
           foreach ($path in $shaderPaths) {
             if (Test-Path $path) {
@@ -49,15 +35,46 @@ jobs:
               break
             }
           }
-          
           if ($found -eq $false) {
             Write-Host "HDR shader file NOT found in any expected location"
             Write-Host "Available HLSL files in current directory:"
             Get-ChildItem -Recurse -Filter "*.hlsl" | Select-Object -First 10
           }
-
+      - name: Fix RC1004 Error - Add newlines to resource files
+        run: >
+          Write-Host "Fixing potential RC1004 errors by ensuring proper file
+          endings..." # Find and fix resource.h files $resourceFiles =
+          Get-ChildItem -Recurse -Name "resource.h" foreach ($file in
+          $resourceFiles) {
+            Write-Host "Checking file: $file"
+            $content = Get-Content $file -Raw
+            if ($content -and !$content.EndsWith("`r`n")) {
+              Write-Host "Adding newline to: $file"
+              $content += "`r`n"
+              Set-Content $file $content -NoNewline
+            }
+          } # Find and fix resource.rc files   $rcFiles = Get-ChildItem -Recurse -Name "*.rc" foreach ($file in $rcFiles) {
+            Write-Host "Checking RC file: $file"
+            $content = Get-Content $file -Raw
+            if ($content -and !$content.EndsWith("`r`n")) {
+              Write-Host "Adding newline to: $file"
+              $content += "`r`n"
+              Set-Content $file $content -NoNewline
+            }
+          } # Check for common syntax issues in resource.h $resourceFiles = Get-ChildItem -Recurse -Name "resource.h" foreach ($file in $resourceFiles) {
+            Write-Host "Validating syntax in: $file"
+            $content = Get-Content $file
+            $lineCount = $content.Count
+            Write-Host "Total lines in $file: $lineCount"
+            # Check for unmatched preprocessor directives
+            $ifCount = ($content | Select-String -Pattern "^\s*#if" | Measure-Object).Count
+            $endifCount = ($content | Select-String -Pattern "^\s*#endif" | Measure-Object).Count
+            Write-Host "#if directives: $ifCount, #endif directives: $endifCount"
+            if ($ifCount -ne $endifCount) {
+              Write-Host "WARNING: Unmatched preprocessor directives in $file"
+            }
+          }
       - name: Select Windows SDK 10.0.22621.0
-        shell: pwsh
         run: |
           if (Test-Path ".\platform.props") {
             Write-Host "Updating platform.props..."
@@ -68,40 +85,32 @@ jobs:
           } else {
             Write-Host "platform.props not found, skipping SDK selection"
           }
-
       - name: Cache build dependencies
         uses: actions/cache@v4
         with:
           path: |
             external/
             _bin/lib/
-          key: build-deps-${{ hashFiles('**/external/**', '**/*.vcxproj', '**/*.props') }}
+          key: build-deps-${{ hashFiles('**/*.vcxproj', '**/*.props') }}
           restore-keys: |
             build-deps-
-
       - name: Cache MSYS installation
         uses: actions/cache@v4
-        id: cache-msys
         with:
           path: C:\MSYS
           key: msys-mingw-w64-gcc-1421-v2
           restore-keys: |
             msys-mingw-w64-gcc-1421-
-
       - name: Set up MSYS (if not cached)
         if: steps.cache-msys.outputs.cache-hit != 'true'
-        shell: pwsh
-        run: |
-          Write-Host "MSYS not cached, downloading..."
-          try {
+        run: >
+          Write-Host "MSYS not cached, downloading..." try {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -UseBasicParsing
             Write-Host "MSYS downloaded successfully"
           } catch {
             Write-Host "Failed to download MSYS: $($_.Exception.Message)"
             exit 1
-          }
-          
-          try {
+          } try {
             7z x MSYS_MinGW-w64_GCC_1421_x86-x64.7z -oC:\MSYS
             Remove-Item MSYS_MinGW-w64_GCC_1421_x86-x64.7z
             Write-Host "MSYS extracted successfully"
@@ -109,18 +118,14 @@ jobs:
             Write-Host "Failed to extract MSYS: $($_.Exception.Message)"
             exit 1
           }
-
       - name: Verify MSYS installation
-        shell: pwsh
-        run: |
-          $cacheHit = "${{ steps.cache-msys.outputs.cache-hit }}"
-          if ($cacheHit -eq "true") {
+        run: >
+          $cacheHit = "${{ steps.cache-msys.outputs.cache-hit }}" if ($cacheHit -eq
+          "true") {
             Write-Host "MSYS restored from cache"
           } else {
             Write-Host "MSYS downloaded and installed"
-          }
-          
-          if (Test-Path "C:\MSYS") {
+          } if (Test-Path "C:\MSYS") {
             try {
               $items = Get-ChildItem C:\MSYS -Recurse -ErrorAction SilentlyContinue
               $totalSize = ($items | Measure-Object -Property Length -Sum).Sum
@@ -133,9 +138,7 @@ jobs:
             Write-Host "MSYS directory not found!"
             exit 1
           }
-
       - name: Create build directories
-        shell: pwsh
         run: |
           $directories = @(
             "_bin\shaders",
@@ -145,128 +148,87 @@ jobs:
             "_bin\Filter_x86",
             "_bin\Filter_x64"
           )
-          
           foreach ($dir in $directories) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
             Write-Host "Created directory: $dir"
           }
-
       - name: Build VideoRenderer with HDR Enhancement
-        shell: pwsh
-        run: |
-          Write-Host "Starting build process..."
-          Write-Host "Note: 'Previous IPDB not found' is normal on GitHub Actions (fresh environment)"
-          
-          if (Test-Path ".\build_mpcvr.cmd") {
+        run: >
+          Write-Host "Starting build process..." Write-Host "Note: 'Previous IPDB not
+          found' is normal on GitHub Actions (fresh environment)" if (Test-Path
+          ".\build_mpcvr.cmd") {
             Write-Host "Found build_mpcvr.cmd, starting build..."
           } else {
             Write-Host "build_mpcvr.cmd not found!"
             Write-Host "Available .cmd files:"
             Get-ChildItem -Filter "*.cmd" | ForEach-Object { Write-Host "  $($_.Name)" }
             exit 1
-          }
-          
-          Write-Host "Build command: .\build_mpcvr.cmd NoWait"
-          try {
+          } Write-Host "Build command: .\build_mpcvr.cmd NoWait" try {
             .\build_mpcvr.cmd NoWait
             $buildExitCode = $LASTEXITCODE
             Write-Host "Build command completed with exit code: $buildExitCode"
-            
             if ($buildExitCode -ne 0) {
               Write-Host "Build failed with exit code: $buildExitCode"
+              # Check for common error patterns in logs
+              $logFiles = Get-ChildItem -Path "_bin\logs" -Filter "*.log" -ErrorAction SilentlyContinue
+              foreach ($logFile in $logFiles) {
+                Write-Host "Checking log file: $($logFile.Name)"
+                $logContent = Get-Content $logFile.FullName -ErrorAction SilentlyContinue
+                $rcErrors = $logContent | Select-String -Pattern "RC\d{4}"
+                if ($rcErrors) {
+                  Write-Host "Found RC errors in $($logFile.Name):"
+                  $rcErrors | ForEach-Object { Write-Host "  $_" }
+                }
+              }
               exit $buildExitCode
             }
           } catch {
             Write-Host "Build failed with exception: $($_.Exception.Message)"
             exit 1
           }
-
-      - name: Verify build output
-        shell: pwsh
-        run: |
-          Write-Host "Checking build outputs..."
-          Write-Host "=== Checking for .zip files ==="
-          
-          try {
-            $zipFiles = Get-ChildItem -Path "_bin" -Recurse -Filter "*.zip" -ErrorAction SilentlyContinue
-          } catch {
-            $zipFiles = @()
-          }
-          
-          if ($zipFiles.Count -eq 0) {
-            Write-Host "No ZIP files found!"
-            Write-Host "Contents of _bin directory:"
-            try {
-              Get-ChildItem -Path "_bin" -Recurse | ForEach-Object { 
-                Write-Host "  $($_.FullName)"
-              }
-            } catch {
-              Write-Host "Could not list _bin directory contents"
+      - name: Verify build outputs
+        run: >
+          Write-Host "Verifying build outputs..." $expectedFiles = @(
+            "_bin\Filter_x86\MpcVideoRenderer.ax",
+            "_bin\Filter_x64\MpcVideoRenderer64.ax"
+          ) $allFound = $true foreach ($file in $expectedFiles) {
+            if (Test-Path $file) {
+              $fileInfo = Get-Item $file
+              Write-Host "✓ Found: $file (Size: $([math]::Round($fileInfo.Length / 1KB, 2)) KB)"
+            } else {
+              Write-Host "✗ Missing: $file"
+              $allFound = $false
             }
+          } if (-not $allFound) {
+            Write-Host "Some expected files are missing!"
+            Write-Host "Available files in _bin:"
+            Get-ChildItem _bin -Recurse -File | ForEach-Object { Write-Host "  $($_.FullName)" }
             exit 1
           }
-          
-          foreach ($zip in $zipFiles) {
-            $sizeInMB = [math]::Round($zip.Length / 1MB, 2)
-            Write-Host "Found: $($zip.FullName) - Size: $sizeInMB MB - Modified: $($zip.LastWriteTime)"
-          }
-          
-          Write-Host "=== Checking zip contents ==="
-          foreach ($zip in $zipFiles) {
-            Write-Host "Contents of $($zip.Name):"
-            try {
-              Add-Type -AssemblyName System.IO.Compression.FileSystem
-              $archive = [System.IO.Compression.ZipFile]::OpenRead($zip.FullName)
-              $archive.Entries | ForEach-Object { Write-Host "  $($_.FullName)" }
-              $archive.Dispose()
-            } catch {
-              Write-Host "  Error reading ZIP: $($_.Exception.Message)"
-            }
-          }
-
-      - name: Upload HDR Enhancement Package
+      - name: Upload build artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: HDR-Enhancement-x64-Package-${{ github.run_number }}
-          path: _bin/*.zip
+          name: mpc-videorenderer-hdr-${{ github.sha }}
+          path: |
+            _bin/Filter_x86/MpcVideoRenderer.ax
+            _bin/Filter_x64/MpcVideoRenderer64.ax
           retention-days: 30
-          if-no-files-found: error
-
-      - name: Create HDR Release
-        if: github.event.inputs.create_release == 'true'
+      - name: Create Release (on push to main branch)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/hdr-enhancement'
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: hdr-enhancement-v${{ github.run_number }}
-          name: ${{ github.event.inputs.release_name || format('HDR Enhancement x64 Build {0}', github.run_number) }}
-          files: _bin/*.zip
-          draft: false
-          prerelease: false
+          tag_name: hdr-build-${{ github.run_number }}
+          name: HDR Enhanced Build ${{ github.run_number }}
           body: |
-            # HDR Enhancement x64 Build 🎯
-            
-            Enhanced MPC Video Renderer with advanced HDR tone mapping controls.
-            
-            ## 🚀 New Features
-            - **Dynamic Range Compression** (0.0-1.0, default 0.5)
-            - **Shadow Detail Enhancement** (0.0-2.0, default 1.2) 
-            - **Color Volume Adaptation** (0.0-1.0, default 0.8)
-            - **Scene Adaptation** (0.0-1.0, default 0.6)
-            
-            ## 📁 Package Contents
-            - `MpcVideoRenderer64.ax` - 64-bit video renderer filter
-            - `Install_MPCVR_64.cmd` - Easy installation script
-            - `Reset_Settings.cmd` - Reset to defaults if needed
-            - `Uninstall_MPCVR_64.cmd` - Clean removal script
-            - Documentation and license files
-            
-            ## ⚙️ Registry Settings
-            Located at: `HKEY_CURRENT_USER\Software\MPC-BE Filters\MPC Video Renderer`
-            
-            **Build Info:**
-            - Commit: ${{ github.sha }}
-            - Branch: ${{ github.ref_name }}
-            - Build Number: ${{ github.run_number }}
-            
-            **Note**: This is a 64-bit only build optimized for modern systems.
+            Automated build of MPC Video Renderer with HDR enhancements
+            **Branch:** ${{ github.ref_name }}
+            **Commit:** ${{ github.sha }}
+            **Build Date:** ${{ github.event.head_commit.timestamp }}
+            ## Changes
+            ${{ github.event.head_commit.message }}
+          files: |
+            _bin/Filter_x86/MpcVideoRenderer.ax
+            _bin/Filter_x64/MpcVideoRenderer64.ax
+          draft: false
+          prerelease: true
