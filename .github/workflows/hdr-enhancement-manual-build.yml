@@ -1,41 +1,49 @@
 name: Build MPC Video Renderer with HDR Enhancement
-on:
+'on':
   push:
     branches:
       - hdr-enhancement
   pull_request:
     branches:
       - hdr-enhancement
-  workflow_dispatch:
-
+  workflow_dispatch: null
 jobs:
   build:
     runs-on: windows-2022
     defaults:
       run:
         shell: pwsh
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: recursive
-
       - name: Verify Environment and Source
-        run: |
-          Write-Host "--- Verifying Environment and Source ---" -ForegroundColor Yellow
-          Write-Host "Current branch: $(git branch --show-current)"
-          Write-Host "Current commit: $(git rev-parse HEAD)"
-          Write-Host "Runner OS: ${{ runner.os }}"
-          Write-Host "--------------------------------------"
+        run: >
+          Write-Host "--- Verifying Environment and Source ---" -ForegroundColor
+          Yellow
 
+          Write-Host "Current branch: $(git branch --show-current)"
+
+          Write-Host "Current commit: $(git rev-parse HEAD)"
+
+          Write-Host "Runner OS: ${{ runner.os }}"
+
+          Write-Host "--------------------------------------"
       - name: Fix RC1004 Error - Add newlines and validate resource files
-        run: |
-          Write-Host "--- Validating and Fixing Resource Files ---" -ForegroundColor Yellow
-          # FIX: Run Get-ChildItem twice with simple filters to ensure maximum compatibility.
+        run: >
+          Write-Host "--- Validating and Fixing Resource Files ---"
+          -ForegroundColor Yellow
+
+          # FIX: Run Get-ChildItem twice with simple filters to ensure maximum
+          compatibility.
+
           $filesToCheck = @()
+
           $filesToCheck += Get-ChildItem -Recurse -Filter "resource.h"
+
           $filesToCheck += Get-ChildItem -Recurse -Filter "*.rc"
+
 
           foreach ($file in $filesToCheck) {
             Write-Host "Checking file: $($file.FullName)"
@@ -57,7 +65,10 @@ jobs:
               Write-Warning "Could not read file $($file.FullName): $($_.Exception.Message)"
             }
           }
-          Write-Host "--- Validating Preprocessor Directives ---" -ForegroundColor Yellow
+
+          Write-Host "--- Validating Preprocessor Directives ---"
+          -ForegroundColor Yellow
+
           Get-ChildItem -Recurse -Filter "resource.h" | ForEach-Object {
             Write-Host "Validating directives in: $($_.FullName)"
             $content = Get-Content $_.FullName
@@ -68,16 +79,16 @@ jobs:
               Write-Warning "Unmatched preprocessor directives found. This could cause compilation errors."
             }
           }
-          Write-Host "------------------------------------------"
 
+          Write-Host "------------------------------------------"
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
-
       - name: Add MSBuild to PATH
-        run: |
-          Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin\"
-          Write-Host "MSBuild added to PATH."
+        run: >
+          Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual
+          Studio\2022\Enterprise\MSBuild\Current\Bin\"
 
+          Write-Host "MSBuild added to PATH."
       - name: Cache Build Dependencies
         id: cache-deps
         uses: actions/cache@v4
@@ -85,22 +96,23 @@ jobs:
           path: |
             external/
             _bin/lib/
-          key: build-deps-${{ hashFiles('**/*.vcxproj', '**/*.props') }}
-
+          key: 'build-deps-${{ hashFiles(''**/*.vcxproj'', ''**/*.props'') }}'
       - name: Cache MSYS Installation
         id: cache-msys
         uses: actions/cache@v4
         with:
-          path: C:\MSYS
+          path: 'C:\MSYS'
           key: msys-mingw-w64-gcc-1421-v3
-
       - name: Set up MSYS (if not cached)
         if: steps.cache-msys.outputs.cache-hit != 'true'
-        run: |
-          Write-Host "--- MSYS Cache Miss - Downloading and Installing MSYS ---" -ForegroundColor Yellow
+        run: >
+          Write-Host "--- MSYS Cache Miss - Downloading and Installing MSYS ---"
+          -ForegroundColor Yellow
+
           try {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             Write-Host "MSYS downloaded. Extracting..."
+            # Use the full path to 7z for reliability
             & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -oC:\MSYS -y
             Remove-Item MSYS.7z
             Write-Host "MSYS extracted successfully." -ForegroundColor Green
@@ -108,47 +120,92 @@ jobs:
             Write-Error "Failed to download or extract MSYS: $($_.Exception.Message)"
             exit 1
           }
-          Write-Host "--------------------------------------------------------"
 
-      - name: Verify MSYS Installation
-        run: |
+          Write-Host "--------------------------------------------------------"
+      - name: Verify and Finalize MSYS Installation
+        run: >
+          Write-Host "--- Verifying MSYS Installation ---" -ForegroundColor
+          Yellow
+
           if ('${{ steps.cache-msys.outputs.cache-hit }}' -eq 'true') {
-            Write-Host "MSYS restored from cache." -ForegroundColor Green
+            Write-Host "MSYS was restored from cache." -ForegroundColor Green
+          } else {
+            Write-Host "MSYS was newly installed. Performing final checks."
+            # FIX: Add a small delay to allow the filesystem to settle after extraction
+            Write-Host "Waiting for 5 seconds for filesystem to sync..."
+            Start-Sleep -Seconds 5
           }
-          if (-not (Test-Path "C:\MSYS\mingw32.exe")) {
-            Write-Error "MSYS installation is corrupt or missing C:\MSYS\mingw32.exe"
+
+
+          # Perform a robust check for the directory and a key file
+
+          $msysPath = "C:\MSYS"
+
+          $keyFile = "C:\MSYS\mingw32.exe"
+
+
+          if (-not (Test-Path $msysPath)) {
+            Write-Error "FATAL: The root MSYS directory '$msysPath' does not exist!"
             exit 1
           }
 
+
+          if (-not (Test-Path $keyFile)) {
+            Write-Error "FATAL: MSYS installation is corrupt or missing the key file: '$keyFile'"
+            Write-Host "Listing contents of C:\MSYS to help debug:"
+            Get-ChildItem -Path $msysPath -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+            exit 1
+          }
+
+
+          Write-Host "MSYS installation verified successfully at '$keyFile'."
+          -ForegroundColor Green
+
+          Write-Host "---------------------------------------"
       - name: Create Build Directories
-        run: |
-          Write-Host "--- Creating Build Directories ---" -ForegroundColor Yellow
-          $directories = @("_bin\logs", "_bin\shaders", "_bin\lib\Release_x86", "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
+        run: >
+          Write-Host "--- Creating Build Directories ---" -ForegroundColor
+          Yellow
+
+          $directories = @("_bin\logs", "_bin\shaders", "_bin\lib\Release_x86",
+          "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
+
           foreach ($dir in $directories) {
             if (-not (Test-Path $dir)) {
               New-Item -ItemType Directory -Force -Path $dir | Out-Null
               Write-Host "Created directory: $dir"
             }
           }
-          Write-Host "----------------------------------"
 
+          Write-Host "----------------------------------"
       - name: Build VideoRenderer with HDR Enhancement
-        run: |
+        run: >
           Write-Host "--- Starting Build ---" -ForegroundColor Yellow
+
           if (-not (Test-Path ".\build_mpcvr.cmd")) {
             Write-Error "build_mpcvr.cmd not found in the root directory!"
             exit 1
           }
-          
+
+
           Write-Host "Executing: & '.\build_mpcvr.cmd' NoWait"
-          Write-Host "Build output will be streamed below and saved to _bin\logs\build_output.log"
-          
-          # Execute the build and stream output to console while also saving to a log file
-          & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath "_bin\logs\build_output.log"
-          
+
+          Write-Host "Build output will be streamed below and saved to
+          _bin\logs\build_output.log"
+
+
+          # Execute the build and stream output to console while also saving to
+          a log file
+
+          & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
+          "_bin\logs\build_output.log"
+
+
           $buildExitCode = $LASTEXITCODE
+
           Write-Host "--------------------"
-          
+
+
           if ($buildExitCode -ne 0) {
             Write-Error "BUILD FAILED with exit code: $buildExitCode"
             
@@ -165,12 +222,12 @@ jobs:
                 Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
                 $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
               } else {
-                 Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
+                Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
               }
 
               if ($warnings) {
-                 Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
-                 $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+                Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
+                $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
               }
 
             } else {
@@ -182,12 +239,15 @@ jobs:
           } else {
             Write-Host "BUILD SUCCEEDED!" -ForegroundColor Green
           }
-
       - name: Verify build outputs
-        run: |
+        run: >
           Write-Host "--- Verifying Build Outputs ---" -ForegroundColor Yellow
-          $expectedFiles = @("_bin\Filter_x86\MpcVideoRenderer.ax", "_bin\Filter_x64\MpcVideoRenderer64.ax")
+
+          $expectedFiles = @("_bin\Filter_x86\MpcVideoRenderer.ax",
+          "_bin\Filter_x64\MpcVideoRenderer64.ax")
+
           $allFound = $true
+
           foreach ($file in $expectedFiles) {
             if (Test-Path $file) {
               $fileInfo = Get-Item $file
@@ -197,30 +257,34 @@ jobs:
               $allFound = $false
             }
           }
+
           if (-not $allFound) {
             Write-Error "Build verification failed. Some expected files are missing."
             exit 1
           }
-          Write-Host "All build outputs verified successfully." -ForegroundColor Green
-          Write-Host "---------------------------------"
 
+          Write-Host "All build outputs verified successfully." -ForegroundColor
+          Green
+
+          Write-Host "---------------------------------"
       - name: Upload build artifacts
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: mpc-videorenderer-hdr-build-${{ github.run_number }}
+          name: 'mpc-videorenderer-hdr-build-${{ github.run_number }}'
           path: |
             _bin/Filter_x86/MpcVideoRenderer.ax
             _bin/Filter_x64/MpcVideoRenderer64.ax
             _bin/logs/build_output.log
           retention-days: 7
-
       - name: Create GitHub Release
-        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/hdr-enhancement'
+        if: >-
+          success() && github.event_name == 'push' && github.ref ==
+          'refs/heads/hdr-enhancement'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: hdr-build-${{ github.run_number }}
-          name: HDR Enhanced Build ${{ github.run_number }}
+          tag_name: 'hdr-build-${{ github.run_number }}'
+          name: 'HDR Enhanced Build ${{ github.run_number }}'
           body: |
             Automated build of MPC Video Renderer with HDR enhancements.
             **Branch:** `${{ github.ref_name }}`
