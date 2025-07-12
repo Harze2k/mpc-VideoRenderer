@@ -26,10 +26,12 @@
 #include <strmif.h>
 #include <map>
 #include <vector>
+
+// Important: Include dependent headers first to ensure all types are defined before use.
 #include "Shaders.h"
-#include "IVideoRenderer.h"
 #include "DX11Helper.h"
 #include "D3D11VP.h"
+#include "IVideoRenderer.h"
 #include "D3DUtil/D3D11Font.h"
 #include "D3DUtil/D3D11Geometry.h"
 #include "VideoProcessor.h"
@@ -39,13 +41,7 @@
 
 class CVideoRendererInputPin;
 
-// Helper struct for managing external shaders
-struct ExternalPixelShader11_t {
-	std::wstring name;
-	CComPtr<ID3D11PixelShader> shader;
-};
-
-// Helper struct for HDR metadata
+// Helper struct for HDR metadata is kept here as it's specific to the processor's logic.
 struct HDRMetadata {
 	DXGI_HDR_METADATA_HDR10 hdr10 = {};
 	bool bValid = false;
@@ -116,6 +112,7 @@ private:
 	void UpdateUpscalingShaders();
 	void UpdateDownscalingShaders();
 	void UpdateBitmapShader();
+	HRESULT UpdateConvertColorShader();
 	void UpdateTexParams(int cdepth);
 	void UpdateRenderRect();
 	void UpdateScalingStrings();
@@ -139,6 +136,7 @@ private:
 	HRESULT FinalPass(const Tex2D_t& Tex, ID3D11Texture2D* pRenderTarget, const CRect& srcRect, const CRect& dstRect);
 	void DrawSubtitles(ID3D11Texture2D* pRenderTarget);
 	HRESULT DrawStats(ID3D11Texture2D* pRenderTarget);
+	void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
 
 	// --- Helper Functions ---
 	bool SourceIsHDR() const;
@@ -149,7 +147,6 @@ private:
 	HRESULT AlphaBlt(ID3D11ShaderResourceView* pShaderResource, ID3D11Texture2D* pRenderTarget, ID3D11Buffer* pVertexBuffer, D3D11_VIEWPORT* pViewPort, ID3D11SamplerState* pSampler);
 	HRESULT TextureCopyRect(const Tex2D_t& Tex, ID3D11Texture2D* pRenderTarget, const CRect& srcRect, const CRect& destRect, ID3D11PixelShader* pPixelShader, ID3D11Buffer* pConstantBuffer, const int iRotation, const bool bFlip);
 	HRESULT TextureResizeShader(const Tex2D_t& Tex, ID3D11Texture2D* pRenderTarget, const CRect& srcRect, const CRect& destRect, ID3D11PixelShader* pPixelShader, const int iRotation, const bool bFlip);
-	void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
 
 	// --- D3D11 Core Objects ---
 	CComPtr<ID3D11Device1>        m_pDevice;
@@ -194,12 +191,12 @@ private:
 	CComPtr<ID3D11Buffer>         m_pPostScaleConstants;
 	
 	// --- Textures ---
-	Tex2D_t m_TexSrcVideo;
-	Tex2D_t m_TexConvertOutput;
-	Tex2D_t m_TexResize;
-	Tex2DArray_t m_TexsPostScale;
-	Tex2D_t m_TexDither;
-	Tex2D_t m_TexAlphaBitmap;
+	TexEx_t       m_TexSrcVideo;
+	Tex2D_t       m_TexConvertOutput;
+	Tex2D_t       m_TexResize;
+	Tex2DArray_t  m_TexsPostScale;
+	Tex2D_t       m_TexDither;
+	Tex2D_t       m_TexAlphaBitmap;
 	
 	// --- External Shaders ---
 	std::vector<ExternalPixelShader11_t> m_pPreScaleShaders;
@@ -221,6 +218,7 @@ private:
 	} m_PSConvColorData;
 	
 	// --- State and Configuration Members ---
+	ExFormat_t                    m_srcExFmt = {};
 	DXGI_SWAP_EFFECT              m_UsedSwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	DXGI_COLOR_SPACE_TYPE         m_currentSwapChainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
 	DXGI_FORMAT                   m_srcDXGIFormat = DXGI_FORMAT_UNKNOWN;
@@ -261,7 +259,7 @@ private:
 
 	// --- Subtitle and Stats Members ---
 	struct Alignment_t {
-		Tex2D_t texture;
+		TexEx_t texture;
 		ColorFormat_t cformat = {};
 		LONG cx = {};
 	} m_Alignment;
@@ -269,8 +267,12 @@ private:
 	bool m_bSubPicWasRendered = false;
 	CComPtr<ID3D11Buffer>         m_pAlphaBitmapVertex;
 	CD3D11Font                    m_Font3D;
+	CD3D11Rectangle               m_StatsBackground;
+	CD3D11Rectangle               m_Rect3D;
+	CD3D11Rectangle               m_Underlay;
+	CD3D11Lines                   m_Lines;
 	CD3D11Lines                   m_SyncLine;
-	CD3D11Rectangle               d3d11rect;
+	CD3D11Rectangle               d3d11rect; // Used in Render() for tearing test
 	D3DCOLOR                      m_dwStatsTextColor = D3DCOLOR_XRGB(255, 255, 255);
 	HMONITOR                      m_lastFullscreenHMonitor = nullptr;
 };
