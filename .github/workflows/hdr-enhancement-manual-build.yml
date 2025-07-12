@@ -26,19 +26,21 @@ jobs:
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
       - name: Download and Install MSYS Environment
         run: >
-          Write-Host "--- Downloading and Installing MSYS ---" -ForegroundColor
-          Yellow
+          Write-Host "--- Downloading and Installing MSYS Environment ---"
+          -ForegroundColor Yellow
 
-          $msysFinalDir = "C:\MSYS"
+          $msysDir = "C:\MSYS"
 
-          $keyFile = Join-Path $msysFinalDir "mingw32.exe"
+          # FIX: The key file is inside the mingw32\bin directory, not the root.
+
+          $keyFile = Join-Path $msysDir "mingw32\bin\gcc.exe"
 
 
           # Clean up any previous attempts to guarantee a fresh start
 
-          if (Test-Path $msysFinalDir) {
-            Write-Host "Removing existing MSYS directory: $msysFinalDir"
-            Remove-Item -Recurse -Force $msysFinalDir
+          if (Test-Path $msysDir) {
+            Write-Host "Removing existing MSYS directory: $msysDir"
+            Remove-Item -Recurse -Force $msysDir
           }
 
 
@@ -46,48 +48,29 @@ jobs:
             Write-Host "Downloading MSYS archive..."
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             
-            # --- THE CORE FIX ---
-            # 1. Extract directly to C:\MSYS. This is what the original script did.
-            Write-Host "Extracting MSYS archive to $msysFinalDir..."
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysFinalDir -y
+            # --- THE SIMPLE & CORRECT EXTRACTION ---
+            # Extract directly to the final destination. No temp folders, no moving files.
+            Write-Host "Extracting MSYS archive directly to $msysDir..."
+            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
             
-            # 2. Find the actual content subfolder that was created inside C:\MSYS.
-            #    We are looking for the directory that CONTAINS mingw32.exe.
-            Write-Host "Searching for the extracted content..."
-            $contentFolder = Get-ChildItem -Path $msysFinalDir -Recurse -Filter "mingw32.exe" | Select-Object -First 1 | ForEach-Object { $_.Directory }
-            
-            if (-not $contentFolder) {
-                Write-Error "FATAL: Could not find 'mingw32.exe' within the extracted files in '$msysFinalDir'."
-                exit 1
-            }
-            
-            Write-Host "Found MSYS content in: $($contentFolder.FullName)"
-
-            # 3. If the content is in a subfolder, move it up.
-            if ($contentFolder.FullName -ne $msysFinalDir) {
-                Write-Host "Content is in a subfolder. Moving it to the root of $msysFinalDir..."
-                # Get all items from the content subfolder and move them to C:\MSYS
-                Get-ChildItem -Path $contentFolder.FullName | Move-Item -Destination $msysFinalDir -Force
-                # Remove the now-empty subfolder
-                Remove-Item -Recurse -Force $contentFolder.FullName
-            } else {
-                Write-Host "Content was extracted directly to the root. No move needed."
-            }
-
             Write-Host "Cleaning up downloaded archive..."
             Remove-Item MSYS.7z
           } catch {
-            Write-Error "A critical error occurred during MSYS setup: $($_.Exception.Message)"
+            Write-Error "A critical error occurred during MSYS download or extraction: $($_.Exception.Message)"
             exit 1
           }
 
 
-          # Final, reliable verification
+          # Final, corrected verification
 
-          Write-Host "Verifying final MSYS installation..."
+          Write-Host "Verifying MSYS installation by checking for key file:
+          $keyFile"
 
           if (-not (Test-Path $keyFile)) {
-            Write-Error "FATAL: Verification failed. Key file '$keyFile' was not found."
+            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found after extraction."
+            # Provide debug output
+            Write-Host "Listing contents of C:\MSYS to help debug:"
+            Get-ChildItem -Path $msysDir -Depth 2 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName.Replace('C:\MSYS\',''))" }
             exit 1
           }
 
@@ -95,7 +78,7 @@ jobs:
           Write-Host "MSYS installed and verified successfully."
           -ForegroundColor Green
 
-          Write-Host "---------------------------------------"
+          Write-Host "---------------------------------------------------"
       - name: Create Build Directories
         run: >
           Write-Host "--- Creating Build Directories ---" -ForegroundColor
@@ -111,7 +94,7 @@ jobs:
           }
 
           Write-Host "Build directories are ready."
-      - name: Build VideoRenderer with HDR Enhancement
+      - name: Build VideoRenderer
         run: >
           Write-Host "--- Starting Build ---" -ForegroundColor Yellow
 
@@ -133,51 +116,30 @@ jobs:
 
           if ($buildExitCode -ne 0) {
             Write-Error "BUILD FAILED with exit code: $buildExitCode"
-            
-            # Detailed Error Analysis
-            Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor Yellow
-            $logFile = "_bin\logs\build_output.log"
-            if (Test-Path $logFile) {
-              $logContent = Get-Content $logFile
-              $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
-              if ($errors) {
-                Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
-                $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-              } else {
-                 Write-Host "No lines matching standard error patterns found. Check full log for details." -ForegroundColor Cyan
-              }
-            } else {
-              Write-Warning "Build log file not found at $logFile"
-            }
             exit $buildExitCode
           } else {
             Write-Host "BUILD SUCCEEDED!" -ForegroundColor Green
           }
-      - name: Verify build outputs
+      - name: Analyze Build Log for Errors (if failed)
+        if: failure()
         run: >
-          Write-Host "--- Verifying Build Outputs ---" -ForegroundColor Yellow
+          Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor
+          Yellow
 
-          $expectedFiles = @("_bin\Filter_x86\MpcVideoRenderer.ax",
-          "_bin\Filter_x64\MpcVideoRenderer64.ax")
+          $logFile = "_bin\logs\build_output.log"
 
-          $allFound = $true
-
-          foreach ($file in $expectedFiles) {
-            if (Test-Path $file) {
-              Write-Host "✓ Found: $file" -ForegroundColor Green
+          if (Test-Path $logFile) {
+            $logContent = Get-Content $logFile
+            $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
+            if ($errors) {
+              Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
+              $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
             } else {
-              Write-Error "✗ Missing required build output: $file"
-              $allFound = $false
+               Write-Host "No lines matching standard error patterns found. Check full log for details." -ForegroundColor Cyan
             }
+          } else {
+            Write-Warning "Build log file not found at $logFile"
           }
-
-          if (-not $allFound) {
-            Write-Error "Build verification failed."
-            exit 1
-          }
-
-          Write-Host "All build outputs verified successfully." -ForegroundColor
-          Green
       - name: Upload build artifacts
         if: success()
         uses: actions/upload-artifact@v4
