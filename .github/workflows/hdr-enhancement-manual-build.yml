@@ -32,25 +32,43 @@ jobs:
       - name: Fix RC1004 Error - Add newlines and validate resource files
         run: |
           Write-Host "--- Validating and Fixing Resource Files ---" -ForegroundColor Yellow
-          Get-ChildItem -Recurse -Filter "resource.h", "*.rc" | ForEach-Object {
-            Write-Host "Checking file: $($_.FullName)"
-            $content = Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
-            if ($content -and -not $content.EndsWith("`r`n")) {
-              Write-Host "  -> Adding newline to: $($_.FullName)" -ForegroundColor Cyan
-              Add-Content -Path $_.FullName -Value "`r`n"
-            } else {
-              Write-Host "  -> File ending is OK."
+          # FIX: Run Get-ChildItem twice with simple filters to ensure maximum compatibility.
+          $filesToCheck = @()
+          $filesToCheck += Get-ChildItem -Recurse -Filter "resource.h"
+          $filesToCheck += Get-ChildItem -Recurse -Filter "*.rc"
+
+          foreach ($file in $filesToCheck) {
+            Write-Host "Checking file: $($file.FullName)"
+            try {
+              $content = Get-Content $file.FullName -Raw
+              # Check for null or empty content before testing the ending
+              if ([string]::IsNullOrEmpty($content)) {
+                Write-Host "  -> File is empty or could not be read. Skipping."
+                continue
+              }
+
+              if (-not $content.EndsWith("`r`n")) {
+                Write-Host "  -> Adding newline to: $($file.FullName)" -ForegroundColor Cyan
+                Add-Content -Path $file.FullName -Value "`r`n"
+              } else {
+                Write-Host "  -> File ending is OK."
+              }
+            } catch {
+              Write-Warning "Could not read file $($file.FullName): $($_.Exception.Message)"
             }
           }
+          Write-Host "--- Validating Preprocessor Directives ---" -ForegroundColor Yellow
           Get-ChildItem -Recurse -Filter "resource.h" | ForEach-Object {
-            $ifCount = (Get-Content $_.FullName | Select-String -Pattern "^\s*#if").Count
-            $endifCount = (Get-Content $_.FullName | Select-String -Pattern "^\s*#endif").Count
-            Write-Host "Validating directives in $($_.FullName): #if count is $ifCount, #endif count is $endifCount"
+            Write-Host "Validating directives in: $($_.FullName)"
+            $content = Get-Content $_.FullName
+            $ifCount = ($content | Where-Object { $_ -match "^\s*#if" }).Count
+            $endifCount = ($content | Where-Object { $_ -match "^\s*#endif" }).Count
+            Write-Host "  -> #if count: $ifCount, #endif count: $endifCount"
             if ($ifCount -ne $endifCount) {
-              Write-Warning "Unmatched preprocessor directives in $($_.FullName). This could cause compilation errors."
+              Write-Warning "Unmatched preprocessor directives found. This could cause compilation errors."
             }
           }
-          Write-Host "--------------------------------------------"
+          Write-Host "------------------------------------------"
 
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
