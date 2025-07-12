@@ -32,7 +32,6 @@ jobs:
           Write-Host "Current commit: $(git rev-parse HEAD)"
           Write-Host "Checking HDR shader file..."
           
-          # Check multiple possible shader locations
           $shaderPaths = @(
             "Shaders\d3d11\ps_fix_hdr10.hlsl",
             "Source\Shaders\d3d11\ps_fix_hdr10.hlsl", 
@@ -43,7 +42,7 @@ jobs:
           $found = $false
           foreach ($path in $shaderPaths) {
             if (Test-Path $path) {
-              Write-Host "✅ HDR shader file found at: $path"
+              Write-Host "HDR shader file found at: $path"
               Write-Host "First 5 lines of shader:"
               Get-Content $path | Select-Object -First 5
               $found = $true
@@ -51,9 +50,9 @@ jobs:
             }
           }
           
-          if (-not $found) {
-            Write-Host "❌ HDR shader file NOT found in any expected location"
-            Write-Host "Available files in current directory:"
+          if ($found -eq $false) {
+            Write-Host "HDR shader file NOT found in any expected location"
+            Write-Host "Available HLSL files in current directory:"
             Get-ChildItem -Recurse -Filter "*.hlsl" | Select-Object -First 10
           }
 
@@ -62,10 +61,12 @@ jobs:
         run: |
           if (Test-Path ".\platform.props") {
             Write-Host "Updating platform.props..."
-            (Get-Content .\platform.props) | ForEach-Object { $_ -replace ">10.0<", ">10.0.22621.0<" } | Set-Content .\platform.props
-            Write-Host "✅ Platform props updated"
+            $content = Get-Content .\platform.props
+            $content = $content -replace ">10.0<", ">10.0.22621.0<"
+            Set-Content .\platform.props $content
+            Write-Host "Platform props updated"
           } else {
-            Write-Host "⚠️ platform.props not found, skipping SDK selection"
+            Write-Host "platform.props not found, skipping SDK selection"
           }
 
       - name: Cache build dependencies
@@ -93,37 +94,43 @@ jobs:
         run: |
           Write-Host "MSYS not cached, downloading..."
           try {
-            # Try primary download
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -UseBasicParsing
-            Write-Host "✅ MSYS downloaded successfully"
+            Write-Host "MSYS downloaded successfully"
           } catch {
-            Write-Host "❌ Failed to download MSYS: $($_.Exception.Message)"
+            Write-Host "Failed to download MSYS: $($_.Exception.Message)"
             exit 1
           }
           
           try {
             7z x MSYS_MinGW-w64_GCC_1421_x86-x64.7z -oC:\MSYS
             Remove-Item MSYS_MinGW-w64_GCC_1421_x86-x64.7z
-            Write-Host "✅ MSYS extracted successfully"
+            Write-Host "MSYS extracted successfully"
           } catch {
-            Write-Host "❌ Failed to extract MSYS: $($_.Exception.Message)"
+            Write-Host "Failed to extract MSYS: $($_.Exception.Message)"
             exit 1
           }
 
       - name: Verify MSYS installation
         shell: pwsh
         run: |
-          if ('${{ steps.cache-msys.outputs.cache-hit }}' == 'true') {
-            Write-Host "✅ MSYS restored from cache"
+          $cacheHit = "${{ steps.cache-msys.outputs.cache-hit }}"
+          if ($cacheHit -eq "true") {
+            Write-Host "MSYS restored from cache"
           } else {
-            Write-Host "✅ MSYS downloaded and installed"
+            Write-Host "MSYS downloaded and installed"
           }
           
           if (Test-Path "C:\MSYS") {
-            $size = (Get-ChildItem C:\MSYS -Recurse -ErrorAction SilentlyContinue | Measure-Object -Property Length -Sum).Sum / 1MB
-            Write-Host "MSYS directory size: $([math]::Round($size, 2)) MB"
+            try {
+              $items = Get-ChildItem C:\MSYS -Recurse -ErrorAction SilentlyContinue
+              $totalSize = ($items | Measure-Object -Property Length -Sum).Sum
+              $sizeInMB = [math]::Round($totalSize / 1MB, 2)
+              Write-Host "MSYS directory size: $sizeInMB MB"
+            } catch {
+              Write-Host "Could not calculate MSYS directory size"
+            }
           } else {
-            Write-Host "❌ MSYS directory not found!"
+            Write-Host "MSYS directory not found!"
             exit 1
           }
 
@@ -141,7 +148,7 @@ jobs:
           
           foreach ($dir in $directories) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            Write-Host "✅ Created directory: $dir"
+            Write-Host "Created directory: $dir"
           }
 
       - name: Build VideoRenderer with HDR Enhancement
@@ -150,8 +157,10 @@ jobs:
           Write-Host "Starting build process..."
           Write-Host "Note: 'Previous IPDB not found' is normal on GitHub Actions (fresh environment)"
           
-          if (-not (Test-Path ".\build_mpcvr.cmd")) {
-            Write-Host "❌ build_mpcvr.cmd not found!"
+          if (Test-Path ".\build_mpcvr.cmd") {
+            Write-Host "Found build_mpcvr.cmd, starting build..."
+          } else {
+            Write-Host "build_mpcvr.cmd not found!"
             Write-Host "Available .cmd files:"
             Get-ChildItem -Filter "*.cmd" | ForEach-Object { Write-Host "  $($_.Name)" }
             exit 1
@@ -160,14 +169,15 @@ jobs:
           Write-Host "Build command: .\build_mpcvr.cmd NoWait"
           try {
             .\build_mpcvr.cmd NoWait
-            Write-Host "✅ Build command completed with exit code: $LASTEXITCODE"
+            $buildExitCode = $LASTEXITCODE
+            Write-Host "Build command completed with exit code: $buildExitCode"
             
-            if ($LASTEXITCODE -ne 0) {
-              Write-Host "❌ Build failed with exit code: $LASTEXITCODE"
-              exit $LASTEXITCODE
+            if ($buildExitCode -ne 0) {
+              Write-Host "Build failed with exit code: $buildExitCode"
+              exit $buildExitCode
             }
           } catch {
-            Write-Host "❌ Build failed with exception: $($_.Exception.Message)"
+            Write-Host "Build failed with exception: $($_.Exception.Message)"
             exit 1
           }
 
@@ -177,19 +187,28 @@ jobs:
           Write-Host "Checking build outputs..."
           Write-Host "=== Checking for .zip files ==="
           
-          $zipFiles = Get-ChildItem -Path "_bin" -Recurse -Filter "*.zip" -ErrorAction SilentlyContinue
+          try {
+            $zipFiles = Get-ChildItem -Path "_bin" -Recurse -Filter "*.zip" -ErrorAction SilentlyContinue
+          } catch {
+            $zipFiles = @()
+          }
           
           if ($zipFiles.Count -eq 0) {
-            Write-Host "❌ No ZIP files found!"
+            Write-Host "No ZIP files found!"
             Write-Host "Contents of _bin directory:"
-            Get-ChildItem -Path "_bin" -Recurse | ForEach-Object { 
-              Write-Host "  $($_.FullName)"
+            try {
+              Get-ChildItem -Path "_bin" -Recurse | ForEach-Object { 
+                Write-Host "  $($_.FullName)"
+              }
+            } catch {
+              Write-Host "Could not list _bin directory contents"
             }
             exit 1
           }
           
           foreach ($zip in $zipFiles) {
-            Write-Host "Found: $($zip.FullName) - Size: $([math]::Round($zip.Length/1MB, 2)) MB - Modified: $($zip.LastWriteTime)"
+            $sizeInMB = [math]::Round($zip.Length / 1MB, 2)
+            Write-Host "Found: $($zip.FullName) - Size: $sizeInMB MB - Modified: $($zip.LastWriteTime)"
           }
           
           Write-Host "=== Checking zip contents ==="
@@ -201,16 +220,15 @@ jobs:
               $archive.Entries | ForEach-Object { Write-Host "  $($_.FullName)" }
               $archive.Dispose()
             } catch {
-              Write-Host "  ❌ Error reading ZIP: $($_.Exception.Message)"
+              Write-Host "  Error reading ZIP: $($_.Exception.Message)"
             }
           }
 
       - name: Upload HDR Enhancement Package
         uses: actions/upload-artifact@v4
         with:
-          name: "HDR-Enhancement-x64-Package-${{ github.run_number }}"
-          path: |
-            _bin/*.zip
+          name: HDR-Enhancement-x64-Package-${{ github.run_number }}
+          path: _bin/*.zip
           retention-days: 30
           if-no-files-found: error
 
@@ -221,9 +239,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: hdr-enhancement-v${{ github.run_number }}
-          name: ${{ github.event.inputs.release_name != '' && github.event.inputs.release_name || format('HDR Enhancement x64 Build {0}', github.run_number) }}
-          files: |
-            _bin/*.zip
+          name: ${{ github.event.inputs.release_name || format('HDR Enhancement x64 Build {0}', github.run_number) }}
+          files: _bin/*.zip
           draft: false
           prerelease: false
           body: |
