@@ -194,6 +194,7 @@ jobs:
                         Write-Host $errorMessage -ForegroundColor Red
                     }
                 }
+            }
                 Write-Host "---------------------------------------" -ForegroundColor Red
       - name: Verify build outputs
         run: >
@@ -244,7 +245,8 @@ jobs:
             } else {
                Write-Host "No lines matching standard error patterns found. Check full log for details." -ForegroundColor Cyan
             }
-          } else {
+          } 
+          else {
             Write-Warning "Build log file not found at $logFile"
           }
       - name: Create Release (on push to hdr-enhancement branch)
