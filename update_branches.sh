@@ -39,8 +39,10 @@ if [ ! -d ".git" ]; then
     exit 1
 fi
 
-# 3. Get the original branch
+# 3. Get the original branch and update remote tracking info
 ORIGINAL_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+echo -e "${YELLOW}--- Updating remote information ---${NC}"
+git fetch origin
 
 # 4. Create the definitive commit on the current branch
 echo -e "${YELLOW}--- Staging ALL local changes for the definitive commit ---${NC}"
@@ -56,9 +58,11 @@ git commit -m "$COMMIT_MESSAGE"
 COMMIT_HASH=$(git rev-parse HEAD)
 echo -e "Definitive commit created: ${GREEN}$COMMIT_HASH${NC}"
 
-# 5. Push the definitive commit to the original branch first
-echo -e "\n${CYAN}--- Pushing definitive commit to '$ORIGINAL_BRANCH' ---${NC}"
-git push origin "$ORIGINAL_BRANCH"
+# 5. Force-push the definitive commit to the original branch first
+echo -e "\n${CYAN}--- Force-pushing definitive commit to '$ORIGINAL_BRANCH' ---${NC}"
+# --- THIS IS THE FIX ---
+git push origin "$ORIGINAL_BRANCH" --force
+# -----------------------
 
 # 6. Loop through target branches
 for branch in "${TARGET_BRANCHES[@]}"; do
@@ -71,9 +75,8 @@ for branch in "${TARGET_BRANCHES[@]}"; do
   echo -e "\n${CYAN}>>> Processing Branch: $branch <<<${NC}"
 
   # Get a clean, up-to-date version of the target branch
-  echo "Switching to '$branch' and syncing with origin..."
+  echo "Switching to '$branch' and resetting to match remote 'origin/$branch'..."
   git checkout "$branch"
-  git fetch origin
   git reset --hard "origin/$branch"
 
   # --- Overwrite folders with content from the definitive commit ---
@@ -83,7 +86,6 @@ for branch in "${TARGET_BRANCHES[@]}"; do
     # Delete the folder on the current branch to ensure a clean slate
     rm -rf "$dir"
     # Use git to checkout the entire folder from the specific commit
-    # This will restore the folder exactly as it was in that commit
     git checkout "$COMMIT_HASH" -- "$dir"
   done
 
