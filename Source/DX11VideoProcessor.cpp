@@ -3656,4 +3656,3 @@ void CDX11VideoProcessor::UpdateSubPic()
 }; // Closing class CDX11VideoProcessor
 
 // Also, ensure there is exactly one blank newline at the end of the file for compatibility.
-
