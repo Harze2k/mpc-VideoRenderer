@@ -3620,6 +3620,18 @@ STDMETHODIMP CDX11VideoProcessor::UpdateAlphaBitmapParameters(const MFVideoAlpha
 		return MF_E_NOT_INITIALIZED;
 	}
 }
+CDX11VideoProcessor::~CDX11VideoProcessor() {}
+void CDX11VideoProcessor::ReleaseSwapChain() {}
+void CDX11VideoProcessor::ReleaseDevice() {}
+long CDX11VideoProcessor::CreatePShaderFromResource(ID3D11PixelShader **ppShader, unsigned int arg) { return E_NOTIMPL; }
+void CDX11VideoProcessor::ReleaseVP() {}
+long CDX11VideoProcessor::Init(HWND__ * const hwnd, bool flag, bool *pBool) { return E_NOTIMPL; }
+void CDX11VideoProcessor::SetShaderLuminanceParams() {}
+void CDX11VideoProcessor::SetShaderConvertColorParams() {}
+long CDX11VideoProcessor::AlphaBlt(ID3D11ShaderResourceView* pSRV, ID3D11Texture2D* pTex, ID3D11Buffer* pBuffer, D3D11_VIEWPORT* pVP, ID3D11SamplerState* pSS) { return E_NOTIMPL; }
+unsigned int CDX11VideoProcessor::GetPostScaleSteps() { return 0; }
+long CDX11VideoProcessor::TextureResizeShader(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, int arg, bool flag) { return E_NOTIMPL; }
+long CDX11VideoProcessor::TextureCopyRect(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, ID3D11Buffer* pBuffer, int arg, bool flag) { return E_NOTIMPL; }
 void CDX11VideoProcessor::SetCallbackDevice()
 {
 	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
