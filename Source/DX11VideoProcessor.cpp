@@ -17,6 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
+
 #include "stdafx.h"
 #include <uuids.h>
 #include <Mferror.h>
@@ -129,9 +130,7 @@ struct PS_EXTSHADER_CONSTANTS
 };
 
 static_assert(sizeof(PS_EXTSHADER_CONSTANTS) % 16 == 0);
-
-static void FillVertices(VERTEX (&Vertices)[4], const UINT srcW, const UINT srcH, const RECT &srcRect,
-						 const int iRotation, const bool bFlip)
+static void FillVertices(VERTEX (&Vertices)[4], const UINT srcW, const UINT srcH, const RECT &srcRect,const int iRotation, const bool bFlip)
 {
 	const float src_dx = 1.0f / srcW;
 	const float src_dy = 1.0f / srcH;
@@ -1407,9 +1406,6 @@ BOOL CDX11VideoProcessor::GetAlignmentSize(const CMediaType &mt, SIZE &Size)
 		else if (FmtParams.cformat == CF_RGB48 || FmtParams.cformat == CF_BGR48)
 		{
 			Size.cx = ALIGN(Size.cx, 2);
-		}
-		else if (FmtParams.cformat == CF_BGRA64 || FmtParams.cformat == CF_B64A)
-		{
 		}
 		else
 		{
@@ -3633,8 +3629,7 @@ void CDX11VideoProcessor::SetCallbackDevice()
 	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
 		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
 	}
-}
-
+};
 void CDX11VideoProcessor::UpdateSubPic()
 {
 	ASSERT(m_pDevice);
@@ -3649,10 +3644,4 @@ void CDX11VideoProcessor::UpdateSubPic()
 			m_pFilter->m_pSubPicQueue->SetSubPicProvider(m_pFilter->m_pSubPicProvider);
 		}
 	}
-}
-
-// Ensure the class definition itself ends properly like:
-
-}; // Closing class CDX11VideoProcessor
-
-// Also, ensure there is exactly one blank newline at the end of the file for compatibility.
+};
