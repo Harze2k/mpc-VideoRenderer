@@ -1841,6 +1841,7 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 	}
 	uint64_t tick3 = GetPreciseTick();
 	m_RenderStats.paintticks = tick3 - tick1;
+	const DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
 	if (m_pDXGISwapChain4)
 	{
 		// ...
@@ -2606,7 +2607,7 @@ HRESULT CDX11VideoProcessor::GetCurentImage(long *pDIBImage)
 			if (m_bHdrLocalToneMapping)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
-				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0);
+				SetHDR10ShaderParams(0, 0, 0, 0, 0, 0, m_fHdrDynamicRangeCompression, m_fHdrShadowDetail, m_fHdrColorVolumeAdaptation, m_fHdrSceneAdaptation);
 			}
 		}
 		else
@@ -3629,22 +3630,20 @@ STDMETHODIMP CDX11VideoProcessor::UpdateAlphaBitmapParameters(const MFVideoAlpha
 }
 void CDX11VideoProcessor::SetCallbackDevice()
 {
-	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack)
-	{
+	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
 		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
 	}
 }
 void CDX11VideoProcessor::UpdateSubPic()
 {
 	ASSERT(m_pDevice);
-	if (m_pFilter->m_pSubPicProvider)
-	{
-		if (m_pSubPicAllocator)
-		{
+
+	if (m_pFilter->m_pSubPicProvider) {
+		if (m_pSubPicAllocator) {
 			m_pSubPicAllocator->ChangeDevice(m_pDevice);
 		}
-		if (m_pFilter->m_pSubPicQueue)
-		{
+
+		if (m_pFilter->m_pSubPicQueue) {
 			m_pFilter->m_pSubPicQueue->Invalidate();
 			m_pFilter->m_pSubPicQueue->SetSubPicProvider(m_pFilter->m_pSubPicProvider);
 		}
