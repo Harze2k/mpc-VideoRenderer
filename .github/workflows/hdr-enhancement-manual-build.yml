@@ -6,7 +6,7 @@ on:
   pull_request:
     branches:
       - hdr-enhancement
-  workflow_dispatch: # This line enables manual runs
+  workflow_dispatch:
 
 jobs:
   build:
@@ -43,34 +43,41 @@ jobs:
             Get-ChildItem -Recurse -Filter "*.hlsl" | Select-Object -First 10
           }
       - name: Fix RC1004 Error - Add newlines to resource files
-        run: >
-          Write-Host "Fixing potential RC1004 errors by ensuring proper file
-          endings..." # Find and fix resource.h files $resourceFiles =
-          Get-ChildItem -Recurse -Name "resource.h" foreach ($file in
-          $resourceFiles) {
+        shell: pwsh
+        run: |
+          Write-Host "Fixing potential RC1004 errors by ensuring proper file endings..."
+
+          # Find and fix all resource.h files
+          $resourceHFiles = Get-ChildItem -Recurse -Name "resource.h"
+          foreach ($file in $resourceHFiles) {
             Write-Host "Checking file: $file"
             $content = Get-Content $file -Raw
             if ($content -and !$content.EndsWith("`r`n")) {
               Write-Host "Adding newline to: $file"
-              $content += "`r`n"
-              Set-Content $file $content -NoNewline
+              Add-Content -Path $file -Value "`r`n"
             }
-          } # Find and fix resource.rc files   $rcFiles = Get-ChildItem -Recurse -Name "*.rc" foreach ($file in $rcFiles) {
+          }
+
+          # Find and fix all .rc files
+          $rcFiles = Get-ChildItem -Recurse -Name "*.rc"
+          foreach ($file in $rcFiles) {
             Write-Host "Checking RC file: $file"
             $content = Get-Content $file -Raw
             if ($content -and !$content.EndsWith("`r`n")) {
               Write-Host "Adding newline to: $file"
-              $content += "`r`n"
-              Set-Content $file $content -NoNewline
+              Add-Content -Path $file -Value "`r`n"
             }
-          } # Check for common syntax issues in resource.h $resourceFiles = Get-ChildItem -Recurse -Name "resource.h" foreach ($file in $resourceFiles) {
+          }
+
+          # Check for common syntax issues in resource.h files
+          foreach ($file in $resourceHFiles) {
             Write-Host "Validating syntax in: $file"
             $content = Get-Content $file
-            $lineCount = $content.Count
-            Write-Host "Total lines in $file: $lineCount"
+            Write-Host "Total lines in $file: $($content.Count)"
+
             # Check for unmatched preprocessor directives
-            $ifCount = ($content | Select-String -Pattern "^\s*#if" | Measure-Object).Count
-            $endifCount = ($content | Select-String -Pattern "^\s*#endif" | Measure-Object).Count
+            $ifCount = ($content | Select-String -Pattern "^\s*#if").Count
+            $endifCount = ($content | Select-String -Pattern "^\s*#endif").Count
             Write-Host "#if directives: $ifCount, #endif directives: $endifCount"
             if ($ifCount -ne $endifCount) {
               Write-Host "WARNING: Unmatched preprocessor directives in $file"
