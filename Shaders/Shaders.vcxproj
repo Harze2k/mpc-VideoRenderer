@@ -79,8 +79,8 @@
       <ShaderType>Pixel</ShaderType>
     </FxCompile>
     <FxCompile Include="d3d11\ps_fix_hdr10.hlsl">
-      <ObjectFileOutput>E:\src\mpc-video-render\_bin\shaders\%(Filename).cso</ObjectFileOutput>
-      <TrackerLogDirectory>E:\src\mpc-video-render\_bin\obj\Debug_x64\Shaders\Shaders.tlog\</TrackerLogDirectory>
+      <ObjectFileOutput>$(SolutionDir)_bin\shaders\%(Filename).cso</ObjectFileOutput>
+      <TrackerLogDirectory>$(SolutionDir)_bin\obj\Debug_x64\Shaders\Shaders.tlog\</TrackerLogDirectory>
       <EntryPointName>main</EntryPointName>
       <SuppressStartupBanner>true</SuppressStartupBanner>
       <ShaderModel>4.0</ShaderModel>
