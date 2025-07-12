@@ -18,65 +18,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Fix RC1004 Error - Add newlines and validate resource files
-        run: >
-          Write-Host "--- Validating and Fixing Resource Files ---"
-          -ForegroundColor Yellow
-
-          $filesToCheck = @()
-
-          $filesToCheck += Get-ChildItem -Recurse -Filter "resource.h"
-
-          $filesToCheck += Get-ChildItem -Recurse -Filter "*.rc"
-
-          foreach ($file in $filesToCheck) {
-            Write-Host "Checking file: $($file.FullName)"
-            try {
-              $content = Get-Content $file.FullName -Raw
-              if ([string]::IsNullOrEmpty($content)) {
-                Write-Host "  -> File is empty or could not be read. Skipping."
-                continue
-              }
-              if (-not $content.EndsWith("`r`n")) {
-                Write-Host "  -> Adding newline to: $($file.FullName)" -ForegroundColor Cyan
-                Add-Content -Path $file.FullName -Value "`r`n"
-              } else {
-                Write-Host "  -> File ending is OK."
-              }
-            } catch {
-              Write-Warning "Could not read file $($file.FullName): $($_.Exception.Message)"
-            }
-          }
-
-          Write-Host "--- Validating Preprocessor Directives ---"
-          -ForegroundColor Yellow
-
-          Get-ChildItem -Recurse -Filter "resource.h" | ForEach-Object {
-            Write-Host "Validating directives in: $($_.FullName)"
-            $content = Get-Content $_.FullName
-            $ifCount = ($content | Where-Object { $_ -match "^\s*#if" }).Count
-            $endifCount = ($content | Where-Object { $_ -match "^\s*#endif" }).Count
-            Write-Host "  -> #if count: $ifCount, #endif count: $endifCount"
-            if ($ifCount -ne $endifCount) {
-              Write-Warning "Unmatched preprocessor directives found. This could cause compilation errors."
-            }
-          }
-
-          Write-Host "------------------------------------------"
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
       - name: Add MSBuild to PATH
-        run: >
+        run: >-
           Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
-
-          Write-Host "MSBuild added to PATH."
       - name: Download and Install MSYS Environment
         run: >
-          Write-Host "--- Downloading and Installing MSYS ---" -ForegroundColor
-          Yellow
+          Write-Host "--- Downloading and Installing MSYS Environment ---"
+          -ForegroundColor Yellow
 
           $msysDir = "C:\MSYS"
+
+          $tempExtractDir = "C:\msys_temp"
 
           $keyFile = "$msysDir\mingw32.exe"
 
@@ -84,34 +39,55 @@ jobs:
           # Clean up any previous attempts
 
           if (Test-Path $msysDir) {
-            Write-Host "Removing existing MSYS directory to ensure a clean slate."
+            Write-Host "Removing existing MSYS directory..."
             Remove-Item -Recurse -Force $msysDir
           }
 
+          if (Test-Path $tempExtractDir) {
+            Write-Host "Removing existing temp extraction directory..."
+            Remove-Item -Recurse -Force $tempExtractDir
+          }
+
+          New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
+
 
           try {
-            Write-Host "Downloading MSYS..."
+            Write-Host "Downloading MSYS archive..."
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             
-            Write-Host "Extracting MSYS to $msysDir..."
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
+            Write-Host "Extracting MSYS to temporary location: $tempExtractDir"
+            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$tempExtractDir -y
             
-            Write-Host "Cleaning up downloaded archive..."
+            # --- This is the critical fix ---
+            Write-Host "Locating the actual MSYS content folder within the extraction..."
+            $sourceFolder = Get-ChildItem -Path $tempExtractDir | Select-Object -First 1
+            if (-not $sourceFolder) {
+              Write-Error "FATAL: No subfolder found in the extracted MSYS archive."
+              exit 1
+            }
+            Write-Host "Found content in: $($sourceFolder.FullName)"
+            
+            Write-Host "Moving content from '$($sourceFolder.FullName)' to '$msysDir'..."
+            # Move all items (* and .*) from the source folder to the final destination
+            Move-Item -Path "$($sourceFolder.FullName)\*" -Destination $msysDir
+            
+            Write-Host "Cleaning up temporary directories and archive..."
+            Remove-Item -Recurse -Force $tempExtractDir
             Remove-Item MSYS.7z
           } catch {
-            Write-Error "A critical error occurred during MSYS download or extraction: $($_.Exception.Message)"
+            Write-Error "A critical error occurred during MSYS setup: $($_.Exception.Message)"
             exit 1
           }
 
 
           # Final, simple verification
 
-          Write-Host "Verifying MSYS installation..."
+          Write-Host "Verifying final MSYS installation..."
 
           if (-not (Test-Path $keyFile)) {
-            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found after extraction."
-            Write-Host "Listing contents of C:\ to help debug:"
-            Get-ChildItem -Path C:\ -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found."
+            Write-Host "Listing contents of C:\MSYS to help debug:"
+            Get-ChildItem -Path $msysDir -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
             exit 1
           }
 
@@ -119,7 +95,7 @@ jobs:
           Write-Host "MSYS installed and verified successfully."
           -ForegroundColor Green
 
-          Write-Host "---------------------------------------"
+          Write-Host "---------------------------------------------------"
       - name: Create Build Directories
         run: >
           Write-Host "--- Creating Build Directories ---" -ForegroundColor
@@ -131,11 +107,10 @@ jobs:
           foreach ($dir in $directories) {
             if (-not (Test-Path $dir)) {
               New-Item -ItemType Directory -Force -Path $dir | Out-Null
-              Write-Host "Created directory: $dir"
             }
           }
 
-          Write-Host "----------------------------------"
+          Write-Host "Build directories are ready."
       - name: Build VideoRenderer with HDR Enhancement
         run: >
           Write-Host "--- Starting Build ---" -ForegroundColor Yellow
@@ -146,11 +121,8 @@ jobs:
           }
 
 
-          Write-Host "Executing: & '.\build_mpcvr.cmd' NoWait"
-
-          Write-Host "Build output will be streamed below and saved to
-          _bin\logs\build_output.log"
-
+          # Execute the build and stream output to console while also saving to
+          a log file
 
           & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
           "_bin\logs\build_output.log"
@@ -158,29 +130,21 @@ jobs:
 
           $buildExitCode = $LASTEXITCODE
 
-          Write-Host "--------------------"
-
 
           if ($buildExitCode -ne 0) {
             Write-Error "BUILD FAILED with exit code: $buildExitCode"
             
+            # Detailed Error Analysis
             Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor Yellow
             $logFile = "_bin\logs\build_output.log"
             if (Test-Path $logFile) {
               $logContent = Get-Content $logFile
               $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
-              $warnings = $logContent | Select-String -Pattern "warning C\d{4}:" -AllMatches
-
               if ($errors) {
                 Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
                 $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
               } else {
-                 Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
-              }
-
-              if ($warnings) {
-                 Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
-                 $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+                 Write-Host "No lines matching standard error patterns found. Check full log for details." -ForegroundColor Cyan
               }
             } else {
               Write-Warning "Build log file not found at $logFile"
@@ -200,8 +164,7 @@ jobs:
 
           foreach ($file in $expectedFiles) {
             if (Test-Path $file) {
-              $fileInfo = Get-Item $file
-              Write-Host "✓ Found: $file (Size: $([math]::Round($fileInfo.Length / 1KB, 2)) KB)" -ForegroundColor Green
+              Write-Host "✓ Found: $file" -ForegroundColor Green
             } else {
               Write-Error "✗ Missing required build output: $file"
               $allFound = $false
@@ -209,14 +172,12 @@ jobs:
           }
 
           if (-not $allFound) {
-            Write-Error "Build verification failed. Some expected files are missing."
+            Write-Error "Build verification failed."
             exit 1
           }
 
           Write-Host "All build outputs verified successfully." -ForegroundColor
           Green
-
-          Write-Host "---------------------------------"
       - name: Upload build artifacts
         if: success()
         uses: actions/upload-artifact@v4
