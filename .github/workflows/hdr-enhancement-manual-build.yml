@@ -21,124 +21,66 @@ jobs:
       - name: Set up MSBuild
         uses: microsoft/setup-msbuild@v2
       - name: Add MSBuild to PATH
-        run: >-
+        run: >
           Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
       - name: Download and Install MSYS Environment
-        run: >
-          Write-Host "--- Downloading and Installing MSYS Environment ---"
-          -ForegroundColor Yellow
-
+        run: |
           $msysDir = "C:\MSYS"
-
-          # FIX: The key file is inside the mingw32\bin directory, not the root.
-
           $keyFile = Join-Path $msysDir "mingw32\bin\gcc.exe"
 
-
-          # Clean up any previous attempts to guarantee a fresh start
-
           if (Test-Path $msysDir) {
-            Write-Host "Removing existing MSYS directory: $msysDir"
             Remove-Item -Recurse -Force $msysDir
           }
 
-
           try {
-            Write-Host "Downloading MSYS archive..."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
-            
-            # --- THE SIMPLE & CORRECT EXTRACTION ---
-            # Extract directly to the final destination. No temp folders, no moving files.
-            Write-Host "Extracting MSYS archive directly to $msysDir..."
+            Invoke-WebRequest -Uri "https://github.com/Aleksoid1978/MSYS/raw/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
-            
-            Write-Host "Cleaning up downloaded archive..."
             Remove-Item MSYS.7z
           } catch {
-            Write-Error "A critical error occurred during MSYS download or extraction: $($_.Exception.Message)"
+            Write-Error "Error during MSYS extraction: $($_.Exception.Message)"
             exit 1
           }
-
-
-          # Final, corrected verification
-
-          Write-Host "Verifying MSYS installation by checking for key file:
-          $keyFile"
 
           if (-not (Test-Path $keyFile)) {
-            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found after extraction."
-            # Provide debug output
-            Write-Host "Listing contents of C:\MSYS to help debug:"
-            Get-ChildItem -Path $msysDir -Depth 2 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.FullName.Replace('C:\MSYS\',''))" }
+            Write-Error "MSYS installation failed. Key file '$keyFile' missing."
+            Get-ChildItem -Path $msysDir -Recurse | ForEach-Object { Write-Host $_.FullName }
             exit 1
           }
-
-
-          Write-Host "MSYS installed and verified successfully."
-          -ForegroundColor Green
-
-          Write-Host "---------------------------------------------------"
       - name: Create Build Directories
-        run: >
-          Write-Host "--- Creating Build Directories ---" -ForegroundColor
-          Yellow
-
-          $directories = @("_bin\logs", "_bin\shaders", "_bin\lib\Release_x86",
-          "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
+        run: |
+          $directories = @(
+            "_bin\logs", "_bin\shaders", "_bin\lib\Release_x86",
+            "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64"
+          )
 
           foreach ($dir in $directories) {
-            if (-not (Test-Path $dir)) {
-              New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            }
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
           }
-
-          Write-Host "Build directories are ready."
       - name: Build VideoRenderer
         run: >
-          Write-Host "--- Starting Build ---" -ForegroundColor Yellow
-
           if (-not (Test-Path ".\build_mpcvr.cmd")) {
-            Write-Error "build_mpcvr.cmd not found in the root directory!"
+            Write-Error "build_mpcvr.cmd not found!"
             exit 1
           }
 
-
-          # Execute the build and stream output to console while also saving to
-          a log file
 
           & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
           "_bin\logs\build_output.log"
 
 
-          $buildExitCode = $LASTEXITCODE
-
-
-          if ($buildExitCode -ne 0) {
-            Write-Error "BUILD FAILED with exit code: $buildExitCode"
-            exit $buildExitCode
-          } else {
-            Write-Host "BUILD SUCCEEDED!" -ForegroundColor Green
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "Build failed with exit code: $LASTEXITCODE"
+            exit $LASTEXITCODE
           }
-      - name: Analyze Build Log for Errors (if failed)
+      - name: Analyze Build Log for Errors
         if: failure()
-        run: >
-          Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor
-          Yellow
-
+        run: |
           $logFile = "_bin\logs\build_output.log"
-
           if (Test-Path $logFile) {
-            $logContent = Get-Content $logFile
-            $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
-            if ($errors) {
-              Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
-              $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-            } else {
-               Write-Host "No lines matching standard error patterns found. Check full log for details." -ForegroundColor Cyan
-            }
+            Select-String -Path $logFile -Pattern "error (C|LNK|RC)\d{4}","Unresolved external symbol" | ForEach-Object { Write-Host $_.Line }
           } else {
-            Write-Warning "Build log file not found at $logFile"
+            Write-Warning "Build log not found at $logFile"
           }
       - name: Upload build artifacts
         if: success()
