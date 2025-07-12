@@ -139,33 +139,62 @@ jobs:
             Write-Host "Created directory: $dir"
           }
       - name: Build VideoRenderer with HDR Enhancement
-        run: |
-          Write-Host "Starting build process..."
+        run: >
+          Write-Host "--- Starting Build ---" -ForegroundColor Yellow
+
           if (-not (Test-Path ".\build_mpcvr.cmd")) {
-            Write-Host "build_mpcvr.cmd not found!"
+            Write-Error "build_mpcvr.cmd not found in the root directory!"
             exit 1
           }
 
-          Write-Host "Build command: & '.\build_mpcvr.cmd' NoWait"
-          Write-Host "Build output will now be streamed in real-time below:"
 
-          & ".\build_mpcvr.cmd" NoWait
+          Write-Host "Executing: & '.\build_mpcvr.cmd' NoWait"
+
+          Write-Host "Build output will be streamed below and saved to
+          _bin\logs\build_output.log"
+
+
+          # Execute the build and stream output to console while also saving to
+          a log file
+
+          & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
+          "_bin\logs\build_output.log"
+
 
           $buildExitCode = $LASTEXITCODE
-          Write-Host "Build command completed with exit code: $buildExitCode"
+
+          Write-Host "--------------------"
+
 
           if ($buildExitCode -ne 0) {
-            Write-Host "Build failed with exit code: $buildExitCode"
-            Get-ChildItem -Path "_bin\logs" -Filter "*.log" -ErrorAction SilentlyContinue | ForEach-Object {
-              Write-Host "Checking log file: $($_.Name)"
-              $rcErrors = Get-Content $_.FullName -ErrorAction SilentlyContinue | Select-String -Pattern "RC\d{4}"
-              if ($rcErrors) {
-                Write-Host "Found RC errors in $($_.Name):"
-                $rcErrors | ForEach-Object { Write-Host "  $_" }
-              }
-            }
-            exit $buildExitCode
-          }
+            Write-Error "BUILD FAILED with exit code: $buildExitCode"
+            
+            # --- Advanced Error and Warning Analysis ---
+            Write-Host "--- Analyzing Build Log for Key Issues ---" -ForegroundColor Yellow
+            $logFile = "_bin\logs\build_output.log"
+            if (Test-Path $logFile) {
+              # Read the entire log file at once
+              $logContent = Get-Content $logFile -Raw
+              
+              # Use regex to find all error blocks. This finds the error code and the lines following it.
+              # This is much more effective than line-by-line Select-String for multi-line errors.
+              $errorMatches = [regex]::Matches($logContent, "(?msi)^.*?(error C\d{4}:.*?)(?=\r?\n\S|\z)")
+              
+              if ($errorMatches.Count -gt 0) {
+                Write-Host "Found $($errorMatches.Count) distinct error block(s):" -ForegroundColor Red
+                
+                # Create a hashtable to store unique errors to avoid spam
+                $uniqueErrors = @{}
+                foreach ($match in $errorMatches) {
+                    # The second capture group is the error message itself
+                    $errorMessage = $match.Groups[1].Value.Trim()
+                    if (-not $uniqueErrors.ContainsKey($errorMessage)) {
+                        $uniqueErrors[$errorMessage] = $true
+                        Write-Host "----------------- ERROR -----------------" -ForegroundColor Red
+                        Write-Host $errorMessage -ForegroundColor Red
+                    }
+                }
+                Write-Host "---------------------------------------" -ForegroundColor Red
       - name: Verify build outputs
         run: >
           Write-Host "Verifying build outputs..."
