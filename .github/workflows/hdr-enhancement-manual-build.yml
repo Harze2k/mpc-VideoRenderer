@@ -114,7 +114,8 @@ jobs:
           try {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             Write-Host "MSYS downloaded successfully"
-            7z x MSYS.7z -oC:\MSYS
+            # Add the -y switch to automatically say "Yes" to all prompts.
+            7z x MSYS.7z -oC:\MSYS -y
             Remove-Item MSYS.7z
             Write-Host "MSYS extracted successfully"
           } catch {
@@ -153,10 +154,8 @@ jobs:
           Write-Host "Build command: & '.\build_mpcvr.cmd' NoWait"
           Write-Host "Build output will now be streamed in real-time below:"
 
-          # Execute the script directly. This streams its output to the log.
           & ".\build_mpcvr.cmd" NoWait
           
-          # After the command finishes, PowerShell automatically sets $LASTEXITCODE.
           $buildExitCode = $LASTEXITCODE
           Write-Host "Build command completed with exit code: $buildExitCode"
           
