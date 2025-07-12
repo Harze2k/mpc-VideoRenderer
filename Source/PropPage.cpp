@@ -79,6 +79,14 @@ CVRMainPPage::~CVRMainPPage()
 	DLog(L"~CVRMainPPage()");
 }
 
+STDMETHODIMP CVRMainPPage::NonDelegatingQueryInterface(REFIID riid, void** ppv)
+{
+    if (riid == __uuidof(IVideoRenderer)) {
+        return GetInterface((IVideoRenderer*)this, ppv);
+    }
+    return CBasePropertyPage::NonDelegatingQueryInterface(riid, ppv);
+}
+
 void CVRMainPPage::AddToolTip(int nID, int nStringID)
 {
 	if (!m_hToolTip) return;
@@ -87,7 +95,7 @@ void CVRMainPPage::AddToolTip(int nID, int nStringID)
 	ti.cbSize = sizeof(TOOLINFOW);
 	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
 	ti.hwnd = m_hWnd;
-	ti.uId = (UINT_PTR)GetDlgItem(nID).m_hWnd; // <<< THE FIX IS HERE
+	ti.uId = (UINT_PTR)GetDlgItem(nID).m_hWnd;
 	ti.lpszText = MAKEINTRESOURCEW(nStringID);
 	SendMessage(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
@@ -152,22 +160,18 @@ void CVRMainPPage::SetControls()
 	swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
 	SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
 
-	// Enhanced HDR Parameters - Initialize sliders
 	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETRANGE, 1, MAKELONG(0, 100));
 	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETRANGE, 1, MAKELONG(0, 200));
 	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETRANGE, 1, MAKELONG(0, 100));
 	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETRANGE, 1, MAKELONG(0, 100));
 
-	// Set current values
 	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrDynamicRangeCompression * 100));
 	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrShadowDetail * 100));
 	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrColorVolumeAdaptation * 100));
 	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrSceneAdaptation * 100));
 
-	// Update edit boxes
 	UpdateHdrParameterDisplays();
 
-	// Store old values
 	m_oldHdrDynamicRangeCompression = m_SetsPP.fHdrDynamicRangeCompression;
 	m_oldHdrShadowDetail = m_SetsPP.fHdrShadowDetail;
 	m_oldHdrColorVolumeAdaptation = m_SetsPP.fHdrColorVolumeAdaptation;
@@ -176,7 +180,7 @@ void CVRMainPPage::SetControls()
 
 void CVRMainPPage::EnableControls()
 {
-	if (!IsWindows8OrGreater()) { // Windows 7
+	if (!IsWindows8OrGreater()) {
 		const BOOL bEnable = !m_SetsPP.bUseD3D11;
 		GetDlgItem(IDC_STATIC1).EnableWindow(bEnable);
 		GetDlgItem(IDC_STATIC2).EnableWindow(bEnable);
@@ -207,7 +211,6 @@ void CVRMainPPage::EnableControls()
 
 	GetDlgItem(IDC_EDIT_DISPLAYMAX).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
 
-	// Enhanced HDR Parameters controls
 	GetDlgItem(IDC_STATIC101).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
 	GetDlgItem(IDC_STATIC102).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
 	GetDlgItem(IDC_STATIC103).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
@@ -715,6 +718,8 @@ HRESULT CVRMainPPage::OnApplyChanges()
 	return S_OK;
 }
 
+// CVRInfoPPage
+
 CVRInfoPPage::CVRInfoPPage(LPUNKNOWN lpunk, HRESULT* phr) :
 	CBasePropertyPage(L"InfoProp", lpunk, IDD_INFOPROPPAGE, IDS_INFOPROPPAGE_TITLE)
 {
@@ -730,6 +735,15 @@ CVRInfoPPage::~CVRInfoPPage()
 		m_hMonoFont = 0;
 	}
 }
+
+STDMETHODIMP CVRInfoPPage::NonDelegatingQueryInterface(REFIID riid, void** ppv)
+{
+    if (riid == __uuidof(IVideoRenderer)) {
+        return GetInterface((IVideoRenderer*)this, ppv);
+    }
+    return CBasePropertyPage::NonDelegatingQueryInterface(riid, ppv);
+}
+
 
 HRESULT CVRInfoPPage::OnConnect(IUnknown *pUnk)
 {
@@ -770,7 +784,6 @@ static WNDPROC OldControlProc;
 static LRESULT CALLBACK ControlProc(HWND control, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	if (message == WM_KEYDOWN && LOWORD(wParam) == VK_ESCAPE) {
-		// fixed Esc handling when EDITTEXT control has ES_MULTILINE property and is in focus
 		HWND parentOwner = GetParentOwner(control);
 		if (parentOwner) {
 			::PostMessageW(parentOwner, WM_COMMAND, IDCANCEL, 0);
@@ -778,17 +791,15 @@ static LRESULT CALLBACK ControlProc(HWND control, UINT message, WPARAM wParam, L
 		return TRUE;
 	}
 
-	return CallWindowProcW(OldControlProc, control, message, wParam, lParam); // call edit control's own windowproc
+	return CallWindowProcW(OldControlProc, control, message, wParam, lParam);
 }
 
 HRESULT CVRInfoPPage::OnActivate()
 {
-	// set m_hWnd for CWindow
 	m_hWnd = m_hwnd;
 
 	SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
 
-	// init monospace font
 	LOGFONTW lf = {};
 	HDC hdc = GetWindowDC();
 	lf.lfHeight = -MulDiv(9, GetDeviceCaps(hdc, LOGPIXELSY), 72);
@@ -827,7 +838,7 @@ HRESULT CVRInfoPPage::OnActivate()
 			double freq = (double)dc.refreshRate.Numerator / (double)dc.refreshRate.Denominator;
 			strInfo += std::format(L"\r\n{} - {:.3f} Hz", dc.displayName, freq);
 
-			if (dc.bitsPerChannel) { // if bitsPerChannel is not set then colorEncoding and other values are invalid
+			if (dc.bitsPerChannel) {
 				const wchar_t* colenc = ColorEncodingToString(dc.colorEncoding);
 				if (colenc) {
 					strInfo += std::format(L" {}", colenc);
@@ -846,6 +857,5 @@ HRESULT CVRInfoPPage::OnActivate()
 	SetDlgItemTextW(IDC_EDIT1, strInfo.c_str());
 
 	OldControlProc = (WNDPROC)::SetWindowLongPtrW(::GetDlgItem(m_hWnd, IDC_EDIT1), GWLP_WNDPROC, (LONG_PTR)ControlProc);
-
 	return S_OK;
 }
