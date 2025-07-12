@@ -27,49 +27,48 @@ jobs:
       - name: Download and Install MSYS Environment
         shell: bash
         run: |
-          $msysDir = "C:\MSYS"
-          $keyFile = Join-Path $msysDir "mingw32\bin\gcc.exe"
-
-          if (Test-Path $msysDir) {
-            Remove-Item -Recurse -Force $msysDir
-          }
-
+          Write-Host "MSYS not cached, downloading..."
           try {
-            curl -sSL "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -o "MSYS.7z"
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
+            Write-Host "MSYS downloaded successfully"
+            7z x MSYS.7z -oC:\MSYS -y
             Remove-Item MSYS.7z
+            Write-Host "MSYS extracted successfully"
           } catch {
-            Write-Error "Error during MSYS extraction: $($_.Exception.Message)"
+            Write-Host "Failed to download or extract MSYS: $($_.Exception.Message)"
             exit 1
           }
-
-          if (-not (Test-Path $keyFile)) {
-            Write-Error "MSYS installation failed. Key file '$keyFile' missing."
-            Get-ChildItem -Path $msysDir -Recurse | ForEach-Object { Write-Host $_.FullName }
-            exit 1
-          }
-      - name: Create Build Directories
+      - name: Verify MSYS installation
+        shell: pwsh
         run: |
-          $directories = @(
-            "_bin\logs", "_bin\shaders", "_bin\lib\Release_x86",
-            "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64"
-          )
+          if ('${{ steps.cache-msys.outputs.cache-hit }}' -eq 'true') {
+            Write-Host "MSYS restored from cache"
+          } else {
+            Write-Host "MSYS downloaded and installed"
+          }
+          if (-not (Test-Path "C:\MSYS")) {
+            Write-Host "MSYS directory not found!"
+            exit 1
+          }
+      - name: Create build directories
+        shell: pwsh
+        run: >
+          $directories = @("_bin\shaders", "_bin\lib\Release_x86",
+          "_bin\lib\Release_x64", "_bin\Filter_x86", "_bin\Filter_x64")
 
           foreach ($dir in $directories) {
             New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            Write-Host "Created directory: $dir"
           }
       - name: Build VideoRenderer
-        run: >
+        shell: pwsh
+        run: |
           if (-not (Test-Path ".\build_mpcvr.cmd")) {
             Write-Error "build_mpcvr.cmd not found!"
             exit 1
           }
-
-
           & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
           "_bin\logs\build_output.log"
-
-
           if ($LASTEXITCODE -ne 0) {
             Write-Error "Build failed with exit code: $LASTEXITCODE"
             exit $LASTEXITCODE
