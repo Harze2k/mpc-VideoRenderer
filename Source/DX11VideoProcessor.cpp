@@ -205,7 +205,7 @@ static HRESULT FillVertexBuffer(ID3D11DeviceContext *pDeviceContext, ID3D11Buffe
 }
 HRESULT CDX11VideoProcessor::UpdateConvertColorShader()
 { // Add CDX11VideoProcessor:: prefix as it's a member function
-	UINT resid = ShaderConvertSelector::GetResourceId(m_srcParams);
+	UINT resid = CShader::GetConvertShaderResourceId(m_srcExFmt.shader_mode);
 	ConvertShaderMode mode = ShaderConvertSelector::GetMode(
 		m_bConvertToSdr, m_bHdrSupport, m_bHdrPassthrough, m_bHdrLocalToneMapping, m_srcExFmt_HDRParams.VideoTransferFunction);
 	HRESULT hr = S_OK; // Declare hr here for use within the function
@@ -229,7 +229,7 @@ HRESULT CDX11VideoProcessor::UpdateConvertColorShader()
 		break;
 	default:
 		hr = CreatePShaderFromResource(&m_pPSConvertColor, resid);
-		break;    return S_OK;`r`n}
+		break;    return S_OK;`r`n    return S_OK;`r`n}
 	DLogIf(FAILED(hr), L"UpdateConvertColorShader() : CreatePShaderFromResource for ConvertColor failed with error {}", HR2Str(hr));
 	// ---- ADDITIONAL HDR10 PATCH STEP ----
 	// This is SEPARATE from the switch, and only called if needed!
@@ -3043,8 +3043,8 @@ HRESULT CDX11VideoProcessor::Reset()
 	return S_OK;
 }
 // In HRESULT CDX11VideoProcessor::GetCurrentImage(...) (lines 1968-2015)
-HRESULT CDX11VideoProcessor::GetCurrentImage(long *pDIBImage)
-{
+
+    RECT imageRect = {0,0,m_srcWidth,m_srcHeight};
 	// ... (existing code for texture creation)
 	// --- FIX START: Save original HDR state and shaders ---
 	const auto backupHdrPassthrough = m_bHdrPassthrough;

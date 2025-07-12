@@ -24,6 +24,7 @@
 #include <dxva2api.h>
 #include <dxgi1_5.h>
 #include <strmif.h>
+#include "Shaders.h"
 #include <map>
 #include "IVideoRenderer.h"
 #include "DX11Helper.h"
@@ -65,7 +66,7 @@ private:
     // --- Helper Function Declarations ---
     HRESULT UpdateConvertColorShader();
     void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
-    void SetHDR10ShaderParams();
+    void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
     bool SourceIsHDR() const;
     HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
     void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
@@ -246,7 +247,7 @@ private:
     // --- Helper Function Declarations ---
     HRESULT UpdateConvertColorShader();
     void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
-    void SetHDR10ShaderParams();
+    void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
     bool SourceIsHDR() const;
     HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
     void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
@@ -259,7 +260,7 @@ private:
 
 	HRESULT CreatePShaderFromResource(ID3D11PixelShader** ppPixelShader, UINT resid);
 	void SetShaderConvertColorParams();
-	void SetShaderLuminanceParams();
+	void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
 	void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
 
 	HRESULT SetShaderDoviCurvesPoly();
@@ -346,7 +347,7 @@ private:
     // --- Helper Function Declarations ---
     HRESULT UpdateConvertColorShader();
     void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
-    void SetHDR10ShaderParams();
+    void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
     bool SourceIsHDR() const;
     HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
     void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
@@ -389,3 +390,4 @@ public:
 	STDMETHODIMP SetAlphaBitmap(const MFVideoAlphaBitmap *pBmpParms) override;
 	STDMETHODIMP UpdateAlphaBitmapParameters(const MFVideoAlphaBitmapParams *pBmpParms) override;
 };
+
