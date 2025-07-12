@@ -202,7 +202,6 @@ private:
 	HRESULT CreatePShaderFromResource(ID3D11PixelShader** ppPixelShader, UINT resid);
 	void SetShaderConvertColorParams();
 	void SetShaderLuminanceParams();
-	// FIX: This is now the one and only declaration for this function
 	void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
 
 	HRESULT SetShaderDoviCurvesPoly();
