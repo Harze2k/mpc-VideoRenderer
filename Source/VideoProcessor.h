@@ -65,7 +65,7 @@ protected:
 	bool m_bHdrPassthrough                 = false;
 	bool m_bHdrLocalToneMapping            = true;
 	int  m_iHdrLocalToneMappingType		   = 0;
-	float m_fHdrDisplayMaxNits             = 2000.0f;
+	float m_fHdrDisplayMaxNits             = 1000.0f;
 	int  m_iHdrToggleDisplay               = HDRTD_Disabled;
 	int  m_iHdrOsdBrightness               = 0;
 	bool m_bConvertToSdr                   = true;

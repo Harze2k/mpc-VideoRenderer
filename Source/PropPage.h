@@ -29,7 +29,7 @@ class __declspec(uuid("DA46D181-07D6-441D-B314-019AEB10148A"))
 {
 	CComQIPtr<IVideoRenderer> m_pVideoRenderer;
 	Settings_t m_SetsPP;
-	HWND m_hToolTip = nullptr; // <<< ADD THIS LINE
+	HWND m_hToolTip = nullptr;
 
 	int m_oldSDRDisplayNits = SDR_NITS_DEF;
 
@@ -47,6 +47,7 @@ private:
 	void SetControls();
 	void EnableControls();
 	void UpdateHdrParameterDisplays();
+	void AddToolTip(int nID, int nStringID);
 
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;

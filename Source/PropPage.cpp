@@ -23,6 +23,7 @@
 #include "Helper.h"
 #include "DisplayConfig.h"
 #include "PropPage.h"
+#include <CommCtrl.h>
 
 void SetCursor(HWND hWnd, LPCWSTR lpCursorName)
 {
@@ -77,18 +78,20 @@ CVRMainPPage::~CVRMainPPage()
 {
 	DLog(L"~CVRMainPPage()");
 }
+
 void CVRMainPPage::AddToolTip(int nID, int nStringID)
 {
 	if (!m_hToolTip) return;
 
 	TOOLINFOW ti = { 0 };
 	ti.cbSize = sizeof(TOOLINFOW);
-	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS; // Use the handle of the control
-	ti.hwnd = m_hWnd;                       // The dialog is the parent of the tooltip
-	ti.uId = (UINT_PTR)GetDlgItem(nID);      // The handle to the control to associate with
-	ti.lpszText = MAKEINTRESOURCEW(nStringID); // The resource ID of the string
+	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+	ti.hwnd = m_hWnd;
+	ti.uId = (UINT_PTR)GetDlgItem(nID);
+	ti.lpszText = MAKEINTRESOURCEW(nStringID);
 	SendMessage(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
+
 void CVRMainPPage::SetControls()
 {
 	CheckDlgButton(IDC_CHECK1, m_SetsPP.bUseD3D11             ? BST_CHECKED : BST_UNCHECKED);
@@ -254,8 +257,9 @@ HRESULT CVRMainPPage::OnDisconnect()
 	if (m_pVideoRenderer == nullptr) {
 		return E_UNEXPECTED;
 	}
-	if (m_hToolTip) { // <<< ADD THIS BLOCK
-		DestroyWindow(m_hToolTip);
+	
+	if (m_hToolTip) {
+		::DestroyWindow(m_hToolTip);
 		m_hToolTip = nullptr;
 	}
 
@@ -275,12 +279,13 @@ HRESULT CVRMainPPage::OnActivate()
 {
 	// set m_hWnd for CWindow
 	m_hWnd = m_hwnd;
+
 	m_hToolTip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
-                                 WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
-                                 CW_USEDEFAULT, CW_USEDEFAULT,
-                                 CW_USEDEFAULT, CW_USEDEFAULT,
-                                 m_hWnd, NULL, g_hInst, NULL);
-    SendMessage(m_hToolTip, TTM_SETMAXTIPWIDTH, 0, 300); // Set max width for tips
+								 WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+								 CW_USEDEFAULT, CW_USEDEFAULT,
+								 CW_USEDEFAULT, CW_USEDEFAULT,
+								 m_hWnd, NULL, g_hInst, NULL);
+    SendMessage(m_hToolTip, TTM_SETMAXTIPWIDTH, 0, 300);
 
 	m_pVideoRenderer->GetSettings(m_SetsPP);
 	m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
@@ -362,10 +367,10 @@ HRESULT CVRMainPPage::OnActivate()
 
 	SetControls();
 	
-	    AddToolTip(IDC_CHECK1, IDS_TT_USE_D3D11);
+	AddToolTip(IDC_CHECK1, IDS_TT_USE_D3D11);
     AddToolTip(IDC_COMBO1, IDS_TT_TEXTURE_FORMAT);
     AddToolTip(IDC_CHECK2, IDS_TT_SHOW_STATS);
-    AddToolTip(IDC_COMBO9, IDS_TT_HDR_TONE_MAPPING); // Covers passthrough as well
+    AddToolTip(IDC_COMBO9, IDS_TT_HDR_TONE_MAPPING);
     AddToolTip(IDC_EDIT_DISPLAYMAX, IDS_TT_HDR_DISPLAY_NITS);
     AddToolTip(IDC_SLIDER3, IDS_TT_DYNAMIC_RANGE);
     AddToolTip(IDC_SLIDER4, IDS_TT_SHADOW_DETAIL);
@@ -620,47 +625,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 			}
 			return (LRESULT)1;
 		}
-		// Enhanced HDR sliders
-		if ((HWND)lParam == GetDlgItem(IDC_SLIDER3)) {
-			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER3, TBM_GETPOS, 0, 0);
-			float newValue = lValue / 100.0f;
-			if (abs(newValue - m_SetsPP.fHdrDynamicRangeCompression) > 0.01f) {
-				m_SetsPP.fHdrDynamicRangeCompression = newValue;
-				UpdateHdrParameterDisplays();
-				SetDirty();
-			}
-			return (LRESULT)1;
-		}
-		if ((HWND)lParam == GetDlgItem(IDC_SLIDER4)) {
-			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER4, TBM_GETPOS, 0, 0);
-			float newValue = lValue / 100.0f;
-			if (abs(newValue - m_SetsPP.fHdrShadowDetail) > 0.01f) {
-				m_SetsPP.fHdrShadowDetail = newValue;
-				UpdateHdrParameterDisplays();
-				SetDirty();
-			}
-			return (LRESULT)1;
-		}
-		if ((HWND)lParam == GetDlgItem(IDC_SLIDER5)) {
-			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER5, TBM_GETPOS, 0, 0);
-			float newValue = lValue / 100.0f;
-			if (abs(newValue - m_SetsPP.fHdrColorVolumeAdaptation) > 0.01f) {
-				m_SetsPP.fHdrColorVolumeAdaptation = newValue;
-				UpdateHdrParameterDisplays();
-				SetDirty();
-			}
-			return (LRESULT)1;
-		}
-		if ((HWND)lParam == GetDlgItem(IDC_SLIDER6)) {
-			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER6, TBM_GETPOS, 0, 0);
-			float newValue = lValue / 100.0f;
-			if (abs(newValue - m_SetsPP.fHdrSceneAdaptation) > 0.01f) {
-				m_SetsPP.fHdrSceneAdaptation = newValue;
-				UpdateHdrParameterDisplays();
-				SetDirty();
-			}
-			return (LRESULT)1;
-		}
 		if ((HWND)lParam == GetDlgItem(IDC_SLIDER2)) {
 			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER2, TBM_GETPOS, 0, 0);
 			lValue *= SDR_NITS_STEP;
@@ -845,5 +809,6 @@ HRESULT CVRInfoPPage::OnActivate()
 	SetDlgItemTextW(IDC_EDIT1, strInfo.c_str());
 
 	OldControlProc = (WNDPROC)::SetWindowLongPtrW(::GetDlgItem(m_hWnd, IDC_EDIT1), GWLP_WNDPROC, (LONG_PTR)ControlProc);
+
 	return S_OK;
 }
