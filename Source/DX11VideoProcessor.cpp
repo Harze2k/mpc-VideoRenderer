@@ -727,9 +727,6 @@ HRESULT CDX11VideoProcessor::SetDevice(ID3D11Device *pDevice, ID3D11DeviceContex
 		{"TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0}};
 	EXECUTE_ASSERT(S_OK == m_pDevice->CreateInputLayout(Layout, std::size(Layout), data, size, &m_pVSimpleInputLayout));
 	EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPS_Simple, IDF_PS_11_SIMPLE));
-#if TEST_SHADER
-	EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPS_TEST, IDF_PS_11_TEST));
-#endif
 	D3D11_BUFFER_DESC BufferDesc = {sizeof(VERTEX) * 4, D3D11_USAGE_DYNAMIC, D3D11_BIND_VERTEX_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0};
 	EXECUTE_ASSERT(S_OK == m_pDevice->CreateBuffer(&BufferDesc, nullptr, &m_pVertexBuffer));
 	BufferDesc = {sizeof(FLOAT) * 4 * 2, D3D11_USAGE_DYNAMIC, D3D11_BIND_CONSTANT_BUFFER, D3D11_CPU_ACCESS_WRITE, 0, 0};
@@ -1522,9 +1519,6 @@ HRESULT CDX11VideoProcessor::ProcessSample(IMediaSample *pSample)
 	}
 	m_RenderStats.syncoffset = rtClock - rtStart;
 	int so = (int)std::clamp(m_RenderStats.syncoffset, -UNITS, UNITS);
-#if SYNC_OFFSET_EX
-	m_SyncDevs.Add(so - m_Syncs.Last());
-#endif
 	m_Syncs.Add(so);
 	if (m_bDoubleFrames)
 	{
@@ -1542,9 +1536,6 @@ HRESULT CDX11VideoProcessor::ProcessSample(IMediaSample *pSample)
 		}
 		m_RenderStats.syncoffset = rtClock - rtStart;
 		so = (int)std::clamp(m_RenderStats.syncoffset, -UNITS, UNITS);
-#if SYNC_OFFSET_EX
-		m_SyncDevs.Add(so - m_Syncs.Last());
-#endif
 		m_Syncs.Add(so);
 	}
 	return hr;
@@ -1848,7 +1839,6 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 		d3d11rect.InvalidateDeviceObjects();
 		nTearingPos = (nTearingPos + 7) % szWindow.cx;
 	}
-#endif
 	uint64_t tick3 = GetPreciseTick();
 	m_RenderStats.paintticks = tick3 - tick1;
 	if (m_pDXGISwapChain4)
@@ -2883,7 +2873,6 @@ HRESULT CDX11VideoProcessor::GetVPInfo(std::wstring &str)
 			}
 		}
 	}
-#endif
 	return S_OK;
 }
 void CDX11VideoProcessor::Configure(const Settings_t &config)
@@ -3233,9 +3222,7 @@ HRESULT CDX11VideoProcessor::AddPreScaleShader(const std::wstring &name, const s
 		return S_FALSE;
 	}
 	return hr;
-#else
-	return E_NOTIMPL;
-#endif
+	// return E_NOTIMPL;
 }
 HRESULT CDX11VideoProcessor::AddPostScaleShader(const std::wstring &name, const std::string &srcCode)
 {
