@@ -2,6 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by MpcVideoRenderer.rc
 //
+
 #define IDD_MAINPROPPAGE                102
 #define IDD_INFOPROPPAGE                103
 #define IDS_MAINPROPPAGE_TITLE          104
@@ -85,6 +86,7 @@
 #define IDF_PS_11_HALFOU_TO_INTERLACE   870
 #define IDF_PS_11_FINAL_PASS            880
 #define IDF_PS_11_FINAL_PASS_10         881
+#define IDF_PS_11_FIX_HDR10             882
 #define IDF_PS_11_TEST                  900
 #define IDC_EDIT1                       1001
 #define IDC_EDIT2                       1002
@@ -125,13 +127,25 @@
 #define IDC_COMBO6                      1046
 #define IDC_COMBO7                      1047
 #define IDC_COMBO8                      1048
+#define IDC_COMBO9                      1066
 #define IDC_BUTTON1                     1051
 #define IDC_SLIDER1                     1061
 #define IDC_SLIDER2                     1062
-#define IDC_COMBO9                      1066
+#define IDC_SLIDER3                     1098
+#define IDC_SLIDER4                     1099
+#define IDC_SLIDER5                     1100
+#define IDC_SLIDER6                     1101
 #define IDC_STATIC99                    1067
-#define IDF_PS_11_FIX_HDR10             1068
-#define IDC_STATIC100                   1068
+#define IDC_STATIC100                   1088
+#define IDC_STATIC101                   1090
+#define IDC_STATIC102                   1091
+#define IDC_STATIC103                   1092
+#define IDC_STATIC104                   1093
+#define IDC_STATIC105                   1094
+#define IDC_EDIT_DRC                    1102
+#define IDC_EDIT_SHADOW                 1103
+#define IDC_EDIT_COLORVOL               1104
+#define IDC_EDIT_SCENE                  1105
 
 // Next default values for new objects
 // 
