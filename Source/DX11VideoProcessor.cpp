@@ -1414,6 +1414,120 @@ bool CDX11VideoProcessor::HandleHDRToggle()
 	}
 	return bRet;
 }
+HRESULT CDX11VideoProcessor::Init(const HWND hwnd, const bool displayHdrChanged, bool* pChangeDevice/* = nullptr*/)
+{
+	DLog(L"CDX11VideoProcessor::Init()");
+
+	const bool bWindowChanged = displayHdrChanged || (m_hWnd != hwnd);
+	m_hWnd = hwnd;
+	m_bHdrPassthroughSupport = false;
+	m_bHdrDisplayModeEnabled = false;
+	m_DisplayBitsPerChannel = 8;
+
+	m_bACMEnabled = false;
+
+	MONITORINFOEXW mi = { sizeof(mi) };
+	GetMonitorInfoW(MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTOPRIMARY), (MONITORINFO*)&mi);
+	DisplayConfig_t displayConfig = {};
+
+	if (GetDisplayConfig(mi.szDevice, displayConfig)) {
+		m_bHdrDisplayModeEnabled = displayConfig.HDREnabled();
+		m_bHdrPassthroughSupport = displayConfig.HDRSupported() && m_bHdrDisplayModeEnabled;
+		m_DisplayBitsPerChannel = displayConfig.bitsPerChannel;
+
+		m_bACMEnabled = !m_bHdrDisplayModeEnabled && displayConfig.ACMEnabled();
+	}
+
+	if (m_bIsFullscreen != m_pFilter->m_bIsFullscreen) {
+		m_srcVideoTransferFunction = 0;
+	}
+
+	IDXGIAdapter* pDXGIAdapter = nullptr;
+	const UINT currentAdapter = GetAdapter(hwnd, m_pDXGIFactory1, &pDXGIAdapter);
+	CheckPointer(pDXGIAdapter, E_FAIL);
+	if (m_nCurrentAdapter == currentAdapter) {
+		SAFE_RELEASE(pDXGIAdapter);
+
+		SetCallbackDevice();
+
+		if (!m_pDXGISwapChain1 || m_bIsFullscreen != m_pFilter->m_bIsFullscreen || bWindowChanged) {
+			InitSwapChain(bWindowChanged);
+			UpdateStatsStatic();
+			m_pFilter->OnDisplayModeChange();
+		}
+
+		return S_OK;
+	}
+	m_nCurrentAdapter = currentAdapter;
+
+	ReleaseSwapChain();
+	m_pDXGIFactory2.Release();
+	ReleaseDevice();
+
+	D3D_FEATURE_LEVEL featureLevels[] = {
+		D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0,
+		D3D_FEATURE_LEVEL_10_1, D3D_FEATURE_LEVEL_10_0,
+	};
+	D3D_FEATURE_LEVEL featurelevel;
+
+	ID3D11Device *pDevice = nullptr;
+
+	HRESULT hr = D3D11CreateDevice(
+		pDXGIAdapter,
+		D3D_DRIVER_TYPE_UNKNOWN,
+		nullptr,
+#ifdef _DEBUG
+		D3D11_CREATE_DEVICE_DEBUG,
+#else
+		0,
+#endif
+		featureLevels,
+		std::size(featureLevels),
+		D3D11_SDK_VERSION,
+		&pDevice,
+		&featurelevel,
+		nullptr);
+#ifdef _DEBUG
+	if (hr == DXGI_ERROR_SDK_COMPONENT_MISSING || (hr == E_FAIL && !IsWindows8OrGreater())) {
+		DLog(L"WARNING: D3D11 debugging messages will not be displayed");
+		hr = D3D11CreateDevice(
+			pDXGIAdapter,
+			D3D_DRIVER_TYPE_UNKNOWN,
+			nullptr,
+			0,
+			featureLevels,
+			std::size(featureLevels),
+			D3D11_SDK_VERSION,
+			&pDevice,
+			&featurelevel,
+			nullptr);
+	}
+#endif
+	SAFE_RELEASE(pDXGIAdapter);
+	if (FAILED(hr)) {
+		DLog(L"CDX11VideoProcessor::Init() : D3D11CreateDevice() failed with error {}", HR2Str(hr));
+		return hr;
+	}
+
+	DLog(L"CDX11VideoProcessor::Init() : D3D11CreateDevice() successfully with feature level {}.{}", (featurelevel >> 12), (featurelevel >> 8) & 0xF);
+
+	hr = SetDevice(pDevice, nullptr);
+	pDevice->Release();
+
+	if (S_OK == hr) {
+		if (pChangeDevice) {
+			*pChangeDevice = true;
+		}
+	}
+
+	if (m_VendorId == PCIV_INTEL && CPUInfo::HaveSSE41()) {
+		m_pCopyGpuFn = CopyGpuFrame_SSE41;
+	} else {
+		m_pCopyGpuFn = CopyPlaneAsIs;
+	}
+
+	return hr;
+}
 BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 {
 	DLog(L"CDX11VideoProcessor::InitMediaType()");
@@ -3993,15 +4107,3 @@ STDMETHODIMP CDX11VideoProcessor::UpdateAlphaBitmapParameters(const MFVideoAlpha
 	}
 }
 CDX11VideoProcessor::~CDX11VideoProcessor() {}
-//CDX11VideoProcessor::~CDX11VideoProcessor() {}
-//void CDX11VideoProcessor::ReleaseSwapChain() {}
-//void CDX11VideoProcessor::ReleaseDevice() {}
-//long CDX11VideoProcessor::CreatePShaderFromResource(ID3D11PixelShader **ppShader, unsigned int arg) { return E_NOTIMPL; }
-//void CDX11VideoProcessor::ReleaseVP() {}
-//long CDX11VideoProcessor::Init(HWND__ * const hwnd, bool flag, bool *pBool) { return E_NOTIMPL; }
-//void CDX11VideoProcessor::SetShaderLuminanceParams() {}
-//void CDX11VideoProcessor::SetShaderConvertColorParams() {}
-//long CDX11VideoProcessor::AlphaBlt(ID3D11ShaderResourceView* pSRV, ID3D11Texture2D* pTex, ID3D11Buffer* pBuffer, D3D11_VIEWPORT* pVP, ID3D11SamplerState* pSS) { return E_NOTIMPL; }
-//long CDX11VideoProcessor::TextureResizeShader(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, int arg, bool flag) { return E_NOTIMPL; }
-//long CDX11VideoProcessor::TextureCopyRect(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, ID3D11Buffer* pBuffer, int arg, bool flag) { return E_NOTIMPL; }
-//void CDX11VideoProcessor::SetCallbackDevice()
