@@ -3992,6 +3992,7 @@ STDMETHODIMP CDX11VideoProcessor::UpdateAlphaBitmapParameters(const MFVideoAlpha
 		return MF_E_NOT_INITIALIZED;
 	}
 }
+CDX11VideoProcessor::~CDX11VideoProcessor() {}
 //CDX11VideoProcessor::~CDX11VideoProcessor() {}
 //void CDX11VideoProcessor::ReleaseSwapChain() {}
 //void CDX11VideoProcessor::ReleaseDevice() {}
