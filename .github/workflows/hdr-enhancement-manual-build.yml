@@ -25,28 +25,33 @@ jobs:
           Add-Content $env:GITHUB_PATH "C:\Program Files\Microsoft Visual
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
       - name: Download and Install MSYS Environment
-        run: |
-          $msysDir = "C:\MSYS"
-          $keyFile = Join-Path $msysDir "mingw32\bin\gcc.exe"
+        shell: bash
+        run: >
+          MSYS_DIR="C:/MSYS"
 
-          if (Test-Path $msysDir) {
-            Remove-Item -Recurse -Force $msysDir
-          }
+          KEY_FILE="$MSYS_DIR/mingw32/bin/gcc.exe"
 
-          try {
-            Invoke-WebRequest -Uri "https://github.com/Aleksoid1978/MSYS/releases/download/v1.0/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
-            Remove-Item MSYS.7z
-          } catch {
-            Write-Error "Error during MSYS extraction: $($_.Exception.Message)"
+
+          if [ -d "$MSYS_DIR" ]; then
+            rm -rf "$MSYS_DIR"
+          fi
+
+
+          curl -L -o MSYS.7z
+          "https://github.com/Aleksoid1978/MSYS/releases/download/v20230603/MSYS_MinGW-w64_GCC_1310_x86-x64.7z"
+
+
+          "/c/Program Files/7-Zip/7z.exe" x MSYS.7z -o"$MSYS_DIR" -y
+
+
+          rm MSYS.7z
+
+
+          if [ ! -f "$KEY_FILE" ]; then
+            echo "MSYS installation failed. Key file '$KEY_FILE' missing."
+            ls -R "$MSYS_DIR"
             exit 1
-          }
-
-          if (-not (Test-Path $keyFile)) {
-            Write-Error "MSYS installation failed. Key file '$keyFile' missing."
-            Get-ChildItem -Path $msysDir -Recurse | ForEach-Object { Write-Host $_.FullName }
-            exit 1
-          }
+          fi
       - name: Create Build Directories
         run: |
           $directories = @(
