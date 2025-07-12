@@ -3633,7 +3633,8 @@ void CDX11VideoProcessor::SetCallbackDevice()
 	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
 		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
 	}
-};
+}
+
 void CDX11VideoProcessor::UpdateSubPic()
 {
 	ASSERT(m_pDevice);
@@ -3648,4 +3649,11 @@ void CDX11VideoProcessor::UpdateSubPic()
 			m_pFilter->m_pSubPicQueue->SetSubPicProvider(m_pFilter->m_pSubPicProvider);
 		}
 	}
-};
+}
+
+// Ensure the class definition itself ends properly like:
+
+}; // Closing class CDX11VideoProcessor
+
+// Also, ensure there is exactly one blank newline at the end of the file for compatibility.
+
