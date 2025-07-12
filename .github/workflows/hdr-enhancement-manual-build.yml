@@ -26,53 +26,55 @@ jobs:
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
       - name: Download and Install MSYS Environment
         run: >
-          Write-Host "--- Downloading and Installing MSYS Environment ---"
-          -ForegroundColor Yellow
+          Write-Host "--- Downloading and Installing MSYS ---" -ForegroundColor
+          Yellow
 
-          $msysDir = "C:\MSYS"
+          $msysFinalDir = "C:\MSYS"
 
-          $tempExtractDir = "C:\msys_temp"
-
-          $keyFile = "$msysDir\mingw32.exe"
+          $keyFile = Join-Path $msysFinalDir "mingw32.exe"
 
 
-          # Clean up any previous attempts
+          # Clean up any previous attempts to guarantee a fresh start
 
-          if (Test-Path $msysDir) {
-            Write-Host "Removing existing MSYS directory..."
-            Remove-Item -Recurse -Force $msysDir
+          if (Test-Path $msysFinalDir) {
+            Write-Host "Removing existing MSYS directory: $msysFinalDir"
+            Remove-Item -Recurse -Force $msysFinalDir
           }
-
-          if (Test-Path $tempExtractDir) {
-            Write-Host "Removing existing temp extraction directory..."
-            Remove-Item -Recurse -Force $tempExtractDir
-          }
-
-          New-Item -ItemType Directory -Force -Path $tempExtractDir | Out-Null
 
 
           try {
             Write-Host "Downloading MSYS archive..."
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             
-            Write-Host "Extracting MSYS to temporary location: $tempExtractDir"
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$tempExtractDir -y
+            # --- THE CORE FIX ---
+            # 1. Extract directly to C:\MSYS. This is what the original script did.
+            Write-Host "Extracting MSYS archive to $msysFinalDir..."
+            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysFinalDir -y
             
-            # --- This is the critical fix ---
-            Write-Host "Locating the actual MSYS content folder within the extraction..."
-            $sourceFolder = Get-ChildItem -Path $tempExtractDir | Select-Object -First 1
-            if (-not $sourceFolder) {
-              Write-Error "FATAL: No subfolder found in the extracted MSYS archive."
-              exit 1
+            # 2. Find the actual content subfolder that was created inside C:\MSYS.
+            #    We are looking for the directory that CONTAINS mingw32.exe.
+            Write-Host "Searching for the extracted content..."
+            $contentFolder = Get-ChildItem -Path $msysFinalDir -Recurse -Filter "mingw32.exe" | Select-Object -First 1 | ForEach-Object { $_.Directory }
+            
+            if (-not $contentFolder) {
+                Write-Error "FATAL: Could not find 'mingw32.exe' within the extracted files in '$msysFinalDir'."
+                exit 1
             }
-            Write-Host "Found content in: $($sourceFolder.FullName)"
             
-            Write-Host "Moving content from '$($sourceFolder.FullName)' to '$msysDir'..."
-            # Move all items (* and .*) from the source folder to the final destination
-            Move-Item -Path "$($sourceFolder.FullName)\*" -Destination $msysDir
-            
-            Write-Host "Cleaning up temporary directories and archive..."
-            Remove-Item -Recurse -Force $tempExtractDir
+            Write-Host "Found MSYS content in: $($contentFolder.FullName)"
+
+            # 3. If the content is in a subfolder, move it up.
+            if ($contentFolder.FullName -ne $msysFinalDir) {
+                Write-Host "Content is in a subfolder. Moving it to the root of $msysFinalDir..."
+                # Get all items from the content subfolder and move them to C:\MSYS
+                Get-ChildItem -Path $contentFolder.FullName | Move-Item -Destination $msysFinalDir -Force
+                # Remove the now-empty subfolder
+                Remove-Item -Recurse -Force $contentFolder.FullName
+            } else {
+                Write-Host "Content was extracted directly to the root. No move needed."
+            }
+
+            Write-Host "Cleaning up downloaded archive..."
             Remove-Item MSYS.7z
           } catch {
             Write-Error "A critical error occurred during MSYS setup: $($_.Exception.Message)"
@@ -80,14 +82,12 @@ jobs:
           }
 
 
-          # Final, simple verification
+          # Final, reliable verification
 
           Write-Host "Verifying final MSYS installation..."
 
           if (-not (Test-Path $keyFile)) {
-            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found."
-            Write-Host "Listing contents of C:\MSYS to help debug:"
-            Get-ChildItem -Path $msysDir -Depth 1 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+            Write-Error "FATAL: Verification failed. Key file '$keyFile' was not found."
             exit 1
           }
 
@@ -95,7 +95,7 @@ jobs:
           Write-Host "MSYS installed and verified successfully."
           -ForegroundColor Green
 
-          Write-Host "---------------------------------------------------"
+          Write-Host "---------------------------------------"
       - name: Create Build Directories
         run: >
           Write-Host "--- Creating Build Directories ---" -ForegroundColor
