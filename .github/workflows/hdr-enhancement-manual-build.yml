@@ -34,7 +34,7 @@ jobs:
           }
 
           try {
-            Invoke-WebRequest -Uri "https://github.com/Aleksoid1978/MSYS/raw/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
+            Invoke-WebRequest -Uri "https://github.com/Aleksoid1978/MSYS/releases/download/v1.0/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
             & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
             Remove-Item MSYS.7z
           } catch {
