@@ -18,25 +18,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: recursive
-      - name: Verify Environment and Source
-        run: >
-          Write-Host "--- Verifying Environment and Source ---" -ForegroundColor
-          Yellow
-
-          Write-Host "Current branch: $(git branch --show-current)"
-
-          Write-Host "Current commit: $(git rev-parse HEAD)"
-
-          Write-Host "Runner OS: ${{ runner.os }}"
-
-          Write-Host "--------------------------------------"
       - name: Fix RC1004 Error - Add newlines and validate resource files
         run: >
           Write-Host "--- Validating and Fixing Resource Files ---"
           -ForegroundColor Yellow
-
-          # FIX: Run Get-ChildItem twice with simple filters to ensure maximum
-          compatibility.
 
           $filesToCheck = @()
 
@@ -44,17 +29,14 @@ jobs:
 
           $filesToCheck += Get-ChildItem -Recurse -Filter "*.rc"
 
-
           foreach ($file in $filesToCheck) {
             Write-Host "Checking file: $($file.FullName)"
             try {
               $content = Get-Content $file.FullName -Raw
-              # Check for null or empty content before testing the ending
               if ([string]::IsNullOrEmpty($content)) {
                 Write-Host "  -> File is empty or could not be read. Skipping."
                 continue
               }
-
               if (-not $content.EndsWith("`r`n")) {
                 Write-Host "  -> Adding newline to: $($file.FullName)" -ForegroundColor Cyan
                 Add-Content -Path $file.FullName -Value "`r`n"
@@ -89,76 +71,52 @@ jobs:
           Studio\2022\Enterprise\MSBuild\Current\Bin\"
 
           Write-Host "MSBuild added to PATH."
-      - name: Cache Build Dependencies
-        id: cache-deps
-        uses: actions/cache@v4
-        with:
-          path: |
-            external/
-            _bin/lib/
-          key: 'build-deps-${{ hashFiles(''**/*.vcxproj'', ''**/*.props'') }}'
-      - name: Cache MSYS Installation
-        id: cache-msys
-        uses: actions/cache@v4
-        with:
-          path: 'C:\MSYS'
-          key: msys-mingw-w64-gcc-1421-v3
-      - name: Set up MSYS (if not cached)
-        if: steps.cache-msys.outputs.cache-hit != 'true'
+      - name: Download and Install MSYS Environment
         run: >
-          Write-Host "--- MSYS Cache Miss - Downloading and Installing MSYS ---"
-          -ForegroundColor Yellow
-
-          try {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
-            Write-Host "MSYS downloaded. Extracting..."
-            # Use the full path to 7z for reliability
-            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -oC:\MSYS -y
-            Remove-Item MSYS.7z
-            Write-Host "MSYS extracted successfully." -ForegroundColor Green
-          } catch {
-            Write-Error "Failed to download or extract MSYS: $($_.Exception.Message)"
-            exit 1
-          }
-
-          Write-Host "--------------------------------------------------------"
-      - name: Verify and Finalize MSYS Installation
-        run: >
-          Write-Host "--- Verifying MSYS Installation ---" -ForegroundColor
+          Write-Host "--- Downloading and Installing MSYS ---" -ForegroundColor
           Yellow
 
-          if ('${{ steps.cache-msys.outputs.cache-hit }}' -eq 'true') {
-            Write-Host "MSYS was restored from cache." -ForegroundColor Green
-          } else {
-            Write-Host "MSYS was newly installed. Performing final checks."
-            # FIX: Add a small delay to allow the filesystem to settle after extraction
-            Write-Host "Waiting for 5 seconds for filesystem to sync..."
-            Start-Sleep -Seconds 5
+          $msysDir = "C:\MSYS"
+
+          $keyFile = "$msysDir\mingw32.exe"
+
+
+          # Clean up any previous attempts
+
+          if (Test-Path $msysDir) {
+            Write-Host "Removing existing MSYS directory to ensure a clean slate."
+            Remove-Item -Recurse -Force $msysDir
           }
 
 
-          # Perform a robust check for the directory and a key file
-
-          $msysPath = "C:\MSYS"
-
-          $keyFile = "C:\MSYS\mingw32.exe"
-
-
-          if (-not (Test-Path $msysPath)) {
-            Write-Error "FATAL: The root MSYS directory '$msysPath' does not exist!"
+          try {
+            Write-Host "Downloading MSYS..."
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Aleksoid1978/MSYS/refs/heads/main/MSYS_MinGW-w64_GCC_1421_x86-x64.7z" -OutFile "MSYS.7z" -UseBasicParsing
+            
+            Write-Host "Extracting MSYS to $msysDir..."
+            & 'C:\Program Files\7-Zip\7z.exe' x MSYS.7z -o$msysDir -y
+            
+            Write-Host "Cleaning up downloaded archive..."
+            Remove-Item MSYS.7z
+          } catch {
+            Write-Error "A critical error occurred during MSYS download or extraction: $($_.Exception.Message)"
             exit 1
           }
 
+
+          # Final, simple verification
+
+          Write-Host "Verifying MSYS installation..."
 
           if (-not (Test-Path $keyFile)) {
-            Write-Error "FATAL: MSYS installation is corrupt or missing the key file: '$keyFile'"
-            Write-Host "Listing contents of C:\MSYS to help debug:"
-            Get-ChildItem -Path $msysPath -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+            Write-Error "FATAL: MSYS installation failed. Key file '$keyFile' was not found after extraction."
+            Write-Host "Listing contents of C:\ to help debug:"
+            Get-ChildItem -Path C:\ -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
             exit 1
           }
 
 
-          Write-Host "MSYS installation verified successfully at '$keyFile'."
+          Write-Host "MSYS installed and verified successfully."
           -ForegroundColor Green
 
           Write-Host "---------------------------------------"
@@ -194,9 +152,6 @@ jobs:
           _bin\logs\build_output.log"
 
 
-          # Execute the build and stream output to console while also saving to
-          a log file
-
           & ".\build_mpcvr.cmd" NoWait 2>&1 | Tee-Object -FilePath
           "_bin\logs\build_output.log"
 
@@ -209,12 +164,10 @@ jobs:
           if ($buildExitCode -ne 0) {
             Write-Error "BUILD FAILED with exit code: $buildExitCode"
             
-            # --- Detailed Error Analysis ---
             Write-Host "--- Analyzing Build Log for Errors ---" -ForegroundColor Yellow
             $logFile = "_bin\logs\build_output.log"
             if (Test-Path $logFile) {
               $logContent = Get-Content $logFile
-              
               $errors = $logContent | Select-String -Pattern "error C\d{4}:", "error LNK\d{4}:", "error RC\d{4}:", "Unresolved external symbol" -AllMatches
               $warnings = $logContent | Select-String -Pattern "warning C\d{4}:" -AllMatches
 
@@ -222,19 +175,16 @@ jobs:
                 Write-Host "Found $($errors.Count) error(s) in the build log:" -ForegroundColor Red
                 $errors.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
               } else {
-                Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
+                 Write-Host "No lines matching standard error patterns (C/LNK/RC) found. Check full log for details." -ForegroundColor Cyan
               }
 
               if ($warnings) {
-                Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
-                $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+                 Write-Host "Found $($warnings.Count) warning(s) in the build log:" -ForegroundColor Yellow
+                 $warnings.Line | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
               }
-
             } else {
               Write-Warning "Build log file not found at $logFile"
             }
-            # --- End of Error Analysis ---
-            
             exit $buildExitCode
           } else {
             Write-Host "BUILD SUCCEEDED!" -ForegroundColor Green
