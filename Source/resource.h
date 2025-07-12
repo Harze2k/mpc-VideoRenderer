@@ -2,7 +2,6 @@
 // Microsoft Visual C++ generated include file.
 // Used by MpcVideoRenderer.rc
 //
-
 #define IDD_MAINPROPPAGE                102
 #define IDD_INFOPROPPAGE                103
 #define IDS_MAINPROPPAGE_TITLE          104
@@ -146,7 +145,6 @@
 #define IDC_EDIT_SHADOW                 1103
 #define IDC_EDIT_COLORVOL               1104
 #define IDC_EDIT_SCENE                  1105
-
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
