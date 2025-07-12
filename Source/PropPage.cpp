@@ -77,7 +77,18 @@ CVRMainPPage::~CVRMainPPage()
 {
 	DLog(L"~CVRMainPPage()");
 }
+void CVRMainPPage::AddToolTip(int nID, int nStringID)
+{
+	if (!m_hToolTip) return;
 
+	TOOLINFOW ti = { 0 };
+	ti.cbSize = sizeof(TOOLINFOW);
+	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS; // Use the handle of the control
+	ti.hwnd = m_hWnd;                       // The dialog is the parent of the tooltip
+	ti.uId = (UINT_PTR)GetDlgItem(nID);      // The handle to the control to associate with
+	ti.lpszText = MAKEINTRESOURCEW(nStringID); // The resource ID of the string
+	SendMessage(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
+}
 void CVRMainPPage::SetControls()
 {
 	CheckDlgButton(IDC_CHECK1, m_SetsPP.bUseD3D11             ? BST_CHECKED : BST_UNCHECKED);
@@ -243,6 +254,10 @@ HRESULT CVRMainPPage::OnDisconnect()
 	if (m_pVideoRenderer == nullptr) {
 		return E_UNEXPECTED;
 	}
+	if (m_hToolTip) { // <<< ADD THIS BLOCK
+		DestroyWindow(m_hToolTip);
+		m_hToolTip = nullptr;
+	}
 
 	if (m_SetsPP.iSDRDisplayNits != m_oldSDRDisplayNits) {
 		// OK or Apply buttons were not pressed. cancel the settings.
@@ -260,6 +275,12 @@ HRESULT CVRMainPPage::OnActivate()
 {
 	// set m_hWnd for CWindow
 	m_hWnd = m_hwnd;
+	m_hToolTip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
+                                 WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+                                 CW_USEDEFAULT, CW_USEDEFAULT,
+                                 CW_USEDEFAULT, CW_USEDEFAULT,
+                                 m_hWnd, NULL, g_hInst, NULL);
+    SendMessage(m_hToolTip, TTM_SETMAXTIPWIDTH, 0, 300); // Set max width for tips
 
 	m_pVideoRenderer->GetSettings(m_SetsPP);
 	m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
@@ -340,6 +361,23 @@ HRESULT CVRMainPPage::OnActivate()
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
 
 	SetControls();
+	
+	    AddToolTip(IDC_CHECK1, IDS_TT_USE_D3D11);
+    AddToolTip(IDC_COMBO1, IDS_TT_TEXTURE_FORMAT);
+    AddToolTip(IDC_CHECK2, IDS_TT_SHOW_STATS);
+    AddToolTip(IDC_COMBO9, IDS_TT_HDR_TONE_MAPPING); // Covers passthrough as well
+    AddToolTip(IDC_EDIT_DISPLAYMAX, IDS_TT_HDR_DISPLAY_NITS);
+    AddToolTip(IDC_SLIDER3, IDS_TT_DYNAMIC_RANGE);
+    AddToolTip(IDC_SLIDER4, IDS_TT_SHADOW_DETAIL);
+    AddToolTip(IDC_SLIDER5, IDS_TT_COLOR_VOLUME);
+    AddToolTip(IDC_SLIDER6, IDS_TT_SCENE_ADAPT);
+    AddToolTip(IDC_CHECK14, IDS_TT_CONVERT_SDR);
+    AddToolTip(IDC_SLIDER2, IDS_TT_SDR_NITS);
+    AddToolTip(IDC_CHECK10, IDS_TT_USE_DITHERING);
+    AddToolTip(IDC_CHECK11, IDS_TT_EXCLUSIVE_FS);
+    AddToolTip(IDC_CHECK15, IDS_TT_VBLANK);
+    AddToolTip(IDC_CHECK13, IDS_TT_FRAME_TIME);
+    AddToolTip(IDC_CHECK16, IDS_TT_REINIT_DISPLAY);
 
 	SetCursor(m_hWnd, IDC_ARROW);
 	SetCursor(m_hWnd, IDC_COMBO1, IDC_HAND);
