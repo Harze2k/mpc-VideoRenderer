@@ -87,7 +87,7 @@ void CVRMainPPage::AddToolTip(int nID, int nStringID)
 	ti.cbSize = sizeof(TOOLINFOW);
 	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
 	ti.hwnd = m_hWnd;
-	ti.uId = (UINT_PTR)GetDlgItem(nID);
+	ti.uId = (UINT_PTR)GetDlgItem(nID).m_hWnd; // <<< THE FIX IS HERE
 	ti.lpszText = MAKEINTRESOURCEW(nStringID);
 	SendMessage(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
@@ -153,10 +153,10 @@ void CVRMainPPage::SetControls()
 	SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
 
 	// Enhanced HDR Parameters - Initialize sliders
-	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
-	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETRANGE, 1, MAKELONG(0, 200));  // 0.0-2.0 range (0-200)  
-	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
-	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETRANGE, 1, MAKELONG(0, 100));
+	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETRANGE, 1, MAKELONG(0, 200));
+	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETRANGE, 1, MAKELONG(0, 100));
+	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETRANGE, 1, MAKELONG(0, 100));
 
 	// Set current values
 	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrDynamicRangeCompression * 100));
@@ -178,7 +178,7 @@ void CVRMainPPage::EnableControls()
 {
 	if (!IsWindows8OrGreater()) { // Windows 7
 		const BOOL bEnable = !m_SetsPP.bUseD3D11;
-		GetDlgItem(IDC_STATIC1).EnableWindow(bEnable); // not working for GROUPBOX
+		GetDlgItem(IDC_STATIC1).EnableWindow(bEnable);
 		GetDlgItem(IDC_STATIC2).EnableWindow(bEnable);
 		GetDlgItem(IDC_CHECK7).EnableWindow(bEnable);
 		GetDlgItem(IDC_CHECK8).EnableWindow(bEnable);
@@ -264,7 +264,6 @@ HRESULT CVRMainPPage::OnDisconnect()
 	}
 
 	if (m_SetsPP.iSDRDisplayNits != m_oldSDRDisplayNits) {
-		// OK or Apply buttons were not pressed. cancel the settings.
 		m_pVideoRenderer->GetSettings(m_SetsPP);
 		m_SetsPP.iSDRDisplayNits = m_oldSDRDisplayNits;
 		m_pVideoRenderer->SetSettings(m_SetsPP);
@@ -277,7 +276,6 @@ HRESULT CVRMainPPage::OnDisconnect()
 
 HRESULT CVRMainPPage::OnActivate()
 {
-	// set m_hWnd for CWindow
 	m_hWnd = m_hwnd;
 
 	m_hToolTip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
@@ -353,8 +351,8 @@ HRESULT CVRMainPPage::OnActivate()
 
 	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETRANGE, 0, MAKELONG(SDR_NITS_MIN / SDR_NITS_STEP, SDR_NITS_MAX / SDR_NITS_STEP));
 	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETTIC, 0, SDR_NITS_DEF / SDR_NITS_STEP);
-	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETLINESIZE, 0, 1); // arrow keys
-	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPAGESIZE, 0, 5); // clicks on trackbar's channel
+	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETLINESIZE, 0, 1);
+	SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPAGESIZE, 0, 5);
 
 	SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
 
@@ -625,6 +623,46 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 			}
 			return (LRESULT)1;
 		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER3)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER3, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrDynamicRangeCompression) > 0.001f) {
+				m_SetsPP.fHdrDynamicRangeCompression = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER4)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER4, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrShadowDetail) > 0.001f) {
+				m_SetsPP.fHdrShadowDetail = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER5)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER5, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrColorVolumeAdaptation) > 0.001f) {
+				m_SetsPP.fHdrColorVolumeAdaptation = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
+		if ((HWND)lParam == GetDlgItem(IDC_SLIDER6)) {
+			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER6, TBM_GETPOS, 0, 0);
+			float newValue = lValue / 100.0f;
+			if (abs(newValue - m_SetsPP.fHdrSceneAdaptation) > 0.001f) {
+				m_SetsPP.fHdrSceneAdaptation = newValue;
+				UpdateHdrParameterDisplays();
+				SetDirty();
+			}
+			return (LRESULT)1;
+		}
 		if ((HWND)lParam == GetDlgItem(IDC_SLIDER2)) {
 			LRESULT lValue = SendDlgItemMessageW(IDC_SLIDER2, TBM_GETPOS, 0, 0);
 			lValue *= SDR_NITS_STEP;
@@ -633,7 +671,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 				GetDlgItem(IDC_EDIT1).SetWindowTextW(std::to_wstring(m_SetsPP.iSDRDisplayNits).c_str());
 				SetDirty();
 				{
-					// apply only SDRDisplayNits
 					Settings_t sets;
 					m_pVideoRenderer->GetSettings(sets);
 					sets.iSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
@@ -644,13 +681,11 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 		}
 	}
 
-	// Let the parent class handle the message.
 	return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
 }
 
 HRESULT CVRMainPPage::OnApplyChanges()
 {
-	// get value
 	wchar_t data[32] = {};
 	GetDlgItemTextW(IDC_EDIT_DISPLAYMAX, data, 32);
 	float displayMaxNits;
@@ -661,22 +696,24 @@ HRESULT CVRMainPPage::OnApplyChanges()
 		return S_FALSE;
 	}
 
-	if (displayMaxNits <= 1.0f || displayMaxNits > 10000.0f) {
+	if (displayMaxNits < HDR_NITS_MIN || displayMaxNits > HDR_NITS_MAX) {
 		MessageBoxW(L"Invalid HDR Brightness. Please enter a valid number from 1.0 to 10000.0.", L"Error", MB_OK | MB_ICONERROR);
 		return S_FALSE;
 	}
-	// if not error then set to m_setsPP
 	m_SetsPP.fHdrDisplayMaxNits = displayMaxNits;
 
 	m_pVideoRenderer->SetSettings(m_SetsPP);
 	m_pVideoRenderer->SaveSettings();
 
 	m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
+	
+	m_oldHdrDynamicRangeCompression = m_SetsPP.fHdrDynamicRangeCompression;
+	m_oldHdrShadowDetail = m_SetsPP.fHdrShadowDetail;
+	m_oldHdrColorVolumeAdaptation = m_SetsPP.fHdrColorVolumeAdaptation;
+	m_oldHdrSceneAdaptation = m_SetsPP.fHdrSceneAdaptation;
 
 	return S_OK;
 }
-
-// CVRInfoPPage
 
 CVRInfoPPage::CVRInfoPPage(LPUNKNOWN lpunk, HRESULT* phr) :
 	CBasePropertyPage(L"InfoProp", lpunk, IDD_INFOPROPPAGE, IDS_INFOPROPPAGE_TITLE)
