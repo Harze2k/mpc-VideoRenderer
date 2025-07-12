@@ -904,23 +904,38 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
 
 void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType)
 {
+	// --- Parameter Validation ---
 	if (masteringMinLuminanceNits <= 0) masteringMinLuminanceNits = 0;
 	if (masteringMaxLuminanceNits <= 0) masteringMaxLuminanceNits = 1000.0f;
-	if (maxCLL <= 0) maxCLL = 1000.0f;
+	if (maxCLL <= 0) maxCLL = masteringMaxLuminanceNits;
 	if (maxFALL <= 0) maxFALL = maxCLL;
-	if (displayMaxNits < 0 || displayMaxNits > 10000.0) displayMaxNits = 1000.0f;
-	if (toneMappingType < 0 || toneMappingType > 4) toneMappingType = 1;
+	if (displayMaxNits <= 0 || displayMaxNits > 10000.0) displayMaxNits = 600.0f;
+	if (toneMappingType < 1 || toneMappingType > 4) toneMappingType = 1;
+	
+	dynamicRangeCompression = std::clamp(dynamicRangeCompression, 0.0f, 1.0f);
+	shadowDetail = std::clamp(shadowDetail, 0.1f, 2.0f); // Avoid division by zero or extreme values
+	colorVolumeAdaptation = std::clamp(colorVolumeAdaptation, 0.0f, 1.0f);
+	sceneAdaptation = std::clamp(sceneAdaptation, 0.0f, 1.0f);
 
-	// needs to be 16 byte aligned
-	FLOAT cbuffer[] = { masteringMinLuminanceNits, masteringMaxLuminanceNits, maxCLL, maxFALL, displayMaxNits, (float)toneMappingType, 0, 0 };
+	float shadowGamma = 1.0f / shadowDetail;
 
+	// --- Constant Buffer Layout (must EXACTLY match the HLSL cbuffer) ---
+	FLOAT cbuffer[] = { 
+		// float4 1
+		masteringMinLuminanceNits, masteringMaxLuminanceNits, maxCLL, maxFALL,
+		// float4 2
+		displayMaxNits, (float)toneMappingType, dynamicRangeCompression, shadowGamma,
+		// float4 3
+		colorVolumeAdaptation, sceneAdaptation, 0.0f, 0.0f
+	};
+	
 	if (m_pHDR10ToneMappingConstants)
 	{
 		m_pDeviceContext->UpdateSubresource(m_pHDR10ToneMappingConstants, 0, nullptr, &cbuffer, 0, 0);
 	}
 	else {
 		D3D11_BUFFER_DESC BufferDesc = {
-			.ByteWidth = (sizeof(cbuffer) + 15) & ~15,
+			.ByteWidth = sizeof(cbuffer),
 			.Usage = D3D11_USAGE_DEFAULT,
 			.BindFlags = D3D11_BIND_CONSTANT_BUFFER,
 		};
@@ -928,9 +943,8 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 		HRESULT result = m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_pHDR10ToneMappingConstants);
 		if (FAILED(result))
 		{
-			DLog(L"SetHDR10ShaderLuminanceParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", result);
+			DLog(L"SetHDR10ShaderParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", result);
 		}
-		EXECUTE_ASSERT(S_OK == result);
 	}
 }
 
@@ -3616,7 +3630,24 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
 		m_fHdrDisplayMaxNits = config.fHdrDisplayMaxNits;
 		changeHDR = true;
 	}
-
+	// FIX: Add checks for the slider values to trigger a shader parameter update
+	if (config.fHdrDynamicRangeCompression != m_fHdrDynamicRangeCompression) {
+		m_fHdrDynamicRangeCompression = config.fHdrDynamicRangeCompression;
+		changeHDR = true;
+	}
+	if (config.fHdrShadowDetail != m_fHdrShadowDetail) {
+		m_fHdrShadowDetail = config.fHdrShadowDetail;
+		changeHDR = true;
+	}
+	if (config.fHdrColorVolumeAdaptation != m_fHdrColorVolumeAdaptation) {
+		m_fHdrColorVolumeAdaptation = config.fHdrColorVolumeAdaptation;
+		changeHDR = true;
+	}
+	if (config.fHdrSceneAdaptation != m_fHdrSceneAdaptation) {
+		m_fHdrSceneAdaptation = config.fHdrSceneAdaptation;
+		changeHDR = true;
+	}
+	
 	if (config.iHdrToggleDisplay != m_iHdrToggleDisplay) {
 		if (config.iHdrToggleDisplay == HDRTD_Disabled || m_iHdrToggleDisplay == HDRTD_Disabled) {
 			changeHDR = true;

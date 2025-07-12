@@ -169,10 +169,16 @@ private:
 	bool m_bHdrAllowSwitchDisplay = true;
 	bool m_bACMEnabled            = false;
 
-	UINT m_srcVideoTransferFunction = 0; // need a description or rename
+	UINT m_srcVideoTransferFunction = 0; 
 
 	std::map<std::wstring, bool> m_hdrModeSavedState;
 	std::map<std::wstring, bool, std::less<>> m_hdrModeStartState;
+	
+	// FIX: Add member variables to track current slider values
+	float m_fHdrDynamicRangeCompression;
+	float m_fHdrShadowDetail;
+	float m_fHdrColorVolumeAdaptation;
+	float m_fHdrSceneAdaptation;
 
 	struct HDRMetadata {
 		DXGI_HDR_METADATA_HDR10 hdr10 = {};

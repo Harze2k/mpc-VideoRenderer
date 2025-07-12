@@ -1,5 +1,5 @@
 /*
- * (C) 2018-2024 see Authors.txt
+ * (C) 2018-2025 see Authors.txt
  *
  * This file is part of MPC-BE.
  *
@@ -153,13 +153,11 @@ struct Settings_t {
 	int  iHdrLocalToneMappingType;
 	float fHdrDisplayMaxNits;
 	
-	// Enhanced HDR Parameters
 	float fHdrDynamicRangeCompression;
 	float fHdrShadowDetail;
 	float fHdrColorVolumeAdaptation;
 	float fHdrSceneAdaptation;
 	
-	// Additional HDR parameters for future expansion
 	float fHdrHighlightRecovery;
 	float fHdrSaturationBoost;
 	float fHdrToneMappingExposure;
@@ -199,17 +197,17 @@ struct Settings_t {
 		bVBlankBeforePresent            = false;
 		bAdjustPresentTime              = true;
 		bReinitByDisplay                = false;
-		bHdrPreferDoVi                  = false;
+		bHdrPreferDoVi                  = true; // FIX: Default to checked
 		if (IsWindows10OrGreater()) {
 			bHdrLocalToneMapping        = true;
 			bHdrPassthrough             = false;
 			iHdrLocalToneMappingType    = HDR_TM_ACES;
-			fHdrDisplayMaxNits          = HDR_NITS_DEF;
+			fHdrDisplayMaxNits          = 600.0f; // FIX: Default nits to 600
 		} else {
 			bHdrLocalToneMapping        = false;
 			bHdrPassthrough             = false;
 			iHdrLocalToneMappingType    = 0;
-			fHdrDisplayMaxNits          = HDR_NITS_DEF;
+			fHdrDisplayMaxNits          = 600.0f;
 		}
 		iHdrToggleDisplay               = HDRTD_Disabled;
 		bConvertToSdr                   = true;
