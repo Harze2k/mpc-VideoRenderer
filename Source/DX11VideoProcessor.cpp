@@ -255,6 +255,89 @@ static void TextureBlt11(
 	ID3D11ShaderResourceView *views[1] = {};
 	pDeviceContext->PSSetShaderResources(0, 1, views);
 }
+HRESULT CDX11VideoProcessor::TextureCopyRect(
+	const Tex2D_t& Tex, ID3D11Texture2D* pRenderTarget,
+	const CRect& srcRect, const CRect& destRect,
+	ID3D11PixelShader* pPixelShader, ID3D11Buffer* pConstantBuffer,
+	const int iRotation, const bool bFlip)
+{
+	CComPtr<ID3D11RenderTargetView> pRenderTargetView;
+
+	HRESULT hr = m_pDevice->CreateRenderTargetView(pRenderTarget, nullptr, &pRenderTargetView);
+	if (FAILED(hr)) {
+		DLog(L"TextureCopyRect() : CreateRenderTargetView() failed with error {}", HR2Str(hr));
+		return hr;
+	}
+
+	hr = FillVertexBuffer(m_pDeviceContext, m_pVertexBuffer, Tex.desc.Width, Tex.desc.Height, srcRect, iRotation, bFlip);
+	if (FAILED(hr)) {
+		return hr;
+	}
+
+	D3D11_VIEWPORT VP;
+	VP.TopLeftX = (FLOAT)destRect.left;
+	VP.TopLeftY = (FLOAT)destRect.top;
+	VP.Width    = (FLOAT)destRect.Width();
+	VP.Height   = (FLOAT)destRect.Height();
+	VP.MinDepth = 0.0f;
+	VP.MaxDepth = 1.0f;
+
+	TextureBlt11(m_pDeviceContext, pRenderTargetView, VP, m_pVSimpleInputLayout, m_pVS_Simple, pPixelShader, Tex.pShaderResource, m_pSamplerPoint, pConstantBuffer, m_pVertexBuffer);
+
+	return hr;
+}
+HRESULT CDX11VideoProcessor::TextureResizeShader(
+	const Tex2D_t& Tex, ID3D11Texture2D* pRenderTarget,
+	const CRect& srcRect, const CRect& dstRect,
+	ID3D11PixelShader* pPixelShader,
+	const int iRotation, const bool bFlip)
+{
+	CComPtr<ID3D11RenderTargetView> pRenderTargetView;
+
+	HRESULT hr = m_pDevice->CreateRenderTargetView(pRenderTarget, nullptr, &pRenderTargetView);
+	if (FAILED(hr)) {
+		DLog(L"CDX11VideoProcessor::TextureResizeShader() : CreateRenderTargetView() failed with error {}", HR2Str(hr));
+		return hr;
+	}
+
+	hr = FillVertexBuffer(m_pDeviceContext, m_pVertexBuffer, Tex.desc.Width, Tex.desc.Height, srcRect, iRotation, bFlip);
+	if (FAILED(hr)) {
+		return hr;
+	}
+
+	const FLOAT constants[][4] = {
+		{(float)Tex.desc.Width, (float)Tex.desc.Height, 1.0f / Tex.desc.Width, 1.0f / Tex.desc.Height},
+		{(float)srcRect.Width() / dstRect.Width(), (float)srcRect.Height() / dstRect.Height(), 0, 0}
+	};
+
+	D3D11_MAPPED_SUBRESOURCE mr;
+	hr = m_pDeviceContext->Map(m_pResizeShaderConstantBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr);
+	if (FAILED(hr)) {
+		DLog(L"CDX11VideoProcessor::TextureResizeShader() : Map() failed with error {}", HR2Str(hr));
+		return hr;
+	}
+
+	memcpy(mr.pData, &constants, sizeof(constants));
+	m_pDeviceContext->Unmap(m_pResizeShaderConstantBuffer, 0);
+
+	D3D11_VIEWPORT VP;
+	VP.TopLeftX = (FLOAT)dstRect.left;
+	VP.TopLeftY = (FLOAT)dstRect.top;
+	VP.Width = (FLOAT)dstRect.Width();
+	VP.Height = (FLOAT)dstRect.Height();
+	VP.MinDepth = 0.0f;
+	VP.MaxDepth = 1.0f;
+
+	TextureBlt11(m_pDeviceContext, pRenderTargetView, VP, m_pVSimpleInputLayout, m_pVS_Simple, pPixelShader, Tex.pShaderResource, m_pSamplerPoint, m_pResizeShaderConstantBuffer, m_pVertexBuffer);
+
+	return hr;
+}
+void CDX11VideoProcessor::SetCallbackDevice()
+{
+	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
+		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
+	}
+}
 CDX11VideoProcessor::CDX11VideoProcessor(CMpcVideoRenderer *pFilter, const Settings_t &config, HRESULT &hr)
 	: CVideoProcessor(pFilter)
 {
@@ -368,6 +451,23 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 		{
 			DLog(L"SetHDR10ShaderParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", result);
 		}
+	}
+}
+void CDX11VideoProcessor::SetShaderLuminanceParams()
+{
+	FLOAT cbuffer[4] = { 10000.0f / m_iSDRDisplayNits, 0, 0, 0 };
+
+	if (m_pCorrectionConstants) {
+		m_pDeviceContext->UpdateSubresource(m_pCorrectionConstants, 0, nullptr, &cbuffer, 0, 0);
+	}
+	else {
+		D3D11_BUFFER_DESC BufferDesc = {
+			.ByteWidth = sizeof(cbuffer),
+			.Usage = D3D11_USAGE_DEFAULT,
+			.BindFlags = D3D11_BIND_CONSTANT_BUFFER
+		};
+		D3D11_SUBRESOURCE_DATA InitData = { &cbuffer, 0, 0 };
+		EXECUTE_ASSERT(S_OK == m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_pCorrectionConstants));
 	}
 }
 HRESULT CDX11VideoProcessor::SetShaderDoviCurvesPoly()
@@ -639,6 +739,138 @@ HRESULT CDX11VideoProcessor::MemCopyToTexSrcVideo(const BYTE *srcData, const int
 		}
 	}
 	return hr;
+}
+void CDX11VideoProcessor::ReleaseVP()
+{
+	DLog(L"CDX11VideoProcessor::ReleaseVP()");
+
+	m_pFilter->ResetStreamingTimes2();
+	m_RenderStats.Reset();
+
+	if (m_pDeviceContext) {
+		m_pDeviceContext->ClearState();
+	}
+
+	m_TexSrcVideo.Release();
+	m_TexConvertOutput.Release();
+	m_TexResize.Release();
+	m_TexsPostScale.Release();
+
+	m_PSConvColorData.Release();
+	m_pDoviCurvesConstantBuffer.Release();
+
+	m_D3D11VP.ReleaseVideoProcessor();
+	m_strCorrection = nullptr;
+
+	m_srcParams      = {};
+	m_srcDXGIFormat  = DXGI_FORMAT_UNKNOWN;
+	m_pCopyPlaneFn   = CopyPlaneAsIs;
+	m_srcWidth       = 0;
+	m_srcHeight      = 0;
+}
+void CDX11VideoProcessor::ReleaseDevice()
+{
+	DLog(L"CDX11VideoProcessor::ReleaseDevice()");
+
+	ReleaseVP();
+	m_D3D11VP.ReleaseVideoDevice();
+
+	m_StatsBackground.InvalidateDeviceObjects();
+	m_Font3D.InvalidateDeviceObjects();
+	m_Rect3D.InvalidateDeviceObjects();
+
+	m_Underlay.InvalidateDeviceObjects();
+	m_Lines.InvalidateDeviceObjects();
+	m_SyncLine.InvalidateDeviceObjects();
+
+	m_TexDither.Release();
+	m_bAlphaBitmapEnable = false;
+	m_pAlphaBitmapVertex.Release();
+	m_TexAlphaBitmap.Release();
+
+	ClearPreScaleShaders();
+	ClearPostScaleShaders();
+	m_pPSCorrection.Release();
+	m_pPSConvertColor.Release();
+	m_pPSConvertColorDeint.Release();
+
+	m_pShaderUpscaleX.Release();
+	m_pShaderUpscaleY.Release();
+	m_pShaderDownscaleX.Release();
+	m_pShaderDownscaleY.Release();
+	m_strShaderX = nullptr;
+	m_strShaderY = nullptr;
+	m_pPSFinalPass.Release();
+
+	m_pCorrectionConstants.Release();
+	m_pPostScaleConstants.Release();
+
+#if TEST_SHADER
+	m_pPS_TEST.Release();
+#endif
+
+	m_pVSimpleInputLayout.Release();
+	m_pVS_Simple.Release();
+	m_pPS_Simple.Release();
+	m_pPS_BitmapToFrame.Release();
+	m_pSamplerPoint.Release();
+	m_pSamplerLinear.Release();
+	m_pSamplerDither.Release();
+	m_pAlphaBlendState.Release();
+
+	m_Alignment.texture.Release();
+	m_Alignment.cformat = {};
+	m_Alignment.cx = {};
+
+	if (m_pDeviceContext) {
+		// need ClearState() (see ReleaseVP()) and Flush() for ID3D11DeviceContext when using DXGI_SWAP_EFFECT_DISCARD in Windows 8/8.1
+		m_pDeviceContext->Flush();
+	}
+	m_pDeviceContext.Release();
+	m_bCallbackDeviceIsSet = false;
+
+#if (1 && _DEBUG)
+	if (m_pDevice) {
+		ID3D11Debug* pDebugDevice = nullptr;
+		HRESULT hr2 = m_pDevice->QueryInterface(IID_PPV_ARGS(&pDebugDevice));
+		if (S_OK == hr2) {
+			hr2 = pDebugDevice->ReportLiveDeviceObjects(D3D11_RLDO_DETAIL);
+			ASSERT(S_OK == hr2);
+		}
+		SAFE_RELEASE(pDebugDevice);
+	}
+#endif
+
+	m_pVertexBuffer.Release();
+	m_pResizeShaderConstantBuffer.Release();
+	m_pHalfOUtoInterlaceConstantBuffer.Release();
+	m_pFinalPassConstantBuffer.Release();
+
+	m_pDevice.Release();
+}
+void CDX11VideoProcessor::ReleaseSwapChain()
+{
+	if (m_pDXGISwapChain1) {
+		m_pDXGISwapChain1->SetFullscreenState(FALSE, nullptr);
+	}
+	m_pDXGIOutput.Release();
+	m_pDXGISwapChain4.Release();
+	m_pDXGISwapChain1.Release();
+}
+HRESULT CDX11VideoProcessor::CreatePShaderFromResource(ID3D11PixelShader** ppPixelShader, UINT resid)
+{
+	if (!m_pDevice || !ppPixelShader) {
+		return E_POINTER;
+	}
+
+	LPVOID data;
+	DWORD size;
+	HRESULT hr = GetDataFromResource(data, size, resid);
+	if (FAILED(hr)) {
+		return hr;
+	}
+
+	return m_pDevice->CreatePixelShader(data, size, nullptr, ppPixelShader);
 }
 HRESULT CDX11VideoProcessor::SetDevice(ID3D11Device *pDevice, ID3D11DeviceContext *pContext)
 {
@@ -991,6 +1223,82 @@ BOOL CDX11VideoProcessor::VerifyMediaType(const CMediaType *pmt)
 	}
 	return TRUE;
 }
+void CDX11VideoProcessor::SetShaderConvertColorParams()
+{
+	mp_cmat cmatrix;
+
+	if (m_Dovi.bValid) {
+		const float brightness = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Brightness) / 255;
+		const float contrast   = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Contrast);
+
+		for (int i = 0; i < 3; i++) {
+			cmatrix.m[i][0] = (float)m_Dovi.msd.ColorMetadata.ycc_to_rgb_matrix[i * 3 + 0] * contrast;
+			cmatrix.m[i][1] = (float)m_Dovi.msd.ColorMetadata.ycc_to_rgb_matrix[i * 3 + 1] * contrast;
+			cmatrix.m[i][2] = (float)m_Dovi.msd.ColorMetadata.ycc_to_rgb_matrix[i * 3 + 2] * contrast;
+		}
+
+		for (int i = 0; i < 3; i++) {
+			cmatrix.c[i] = brightness;
+			for (int j = 0; j < 3; j++) {
+				cmatrix.c[i] -= cmatrix.m[i][j] * m_Dovi.msd.ColorMetadata.ycc_to_rgb_offset[j];
+			}
+		}
+
+		m_PSConvColorData.bEnable = true;
+	}
+	else {
+		mp_csp_params csp_params;
+		set_colorspace(m_srcExFmt, csp_params.color);
+		csp_params.brightness = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Brightness) / 255;
+		csp_params.contrast   = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Contrast);
+		csp_params.hue        = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Hue) / 180 * acos(-1);
+		csp_params.saturation = DXVA2FixedToFloat(m_DXVA2ProcAmpValues.Saturation);
+		csp_params.gray       = m_srcParams.CSType == CS_GRAY;
+
+		csp_params.input_bits = csp_params.texture_bits = m_srcParams.CDepth;
+
+		mp_get_csp_matrix(&csp_params, &cmatrix);
+
+		m_PSConvColorData.bEnable =
+			m_srcParams.CSType == CS_YUV ||
+			m_srcParams.cformat == CF_GBRP8 || m_srcParams.cformat == CF_GBRP10 || m_srcParams.cformat == CF_GBRP16 ||
+			csp_params.gray ||
+			fabs(csp_params.brightness) > 1e-4f || fabs(csp_params.contrast - 1.0f) > 1e-4f;
+	}
+
+	PS_COLOR_TRANSFORM cbuffer = {
+		{cmatrix.m[0][0], cmatrix.m[0][1], cmatrix.m[0][2], 0},
+		{cmatrix.m[1][0], cmatrix.m[1][1], cmatrix.m[1][2], 0},
+		{cmatrix.m[2][0], cmatrix.m[2][1], cmatrix.m[2][2], 0},
+		{cmatrix.c[0],    cmatrix.c[1],    cmatrix.c[2],    0},
+	};
+
+	if (m_srcParams.cformat == CF_GBRP8 || m_srcParams.cformat == CF_GBRP10 || m_srcParams.cformat == CF_GBRP16) {
+		std::swap(cbuffer.cm_r.x, cbuffer.cm_r.y); std::swap(cbuffer.cm_r.y, cbuffer.cm_r.z);
+		std::swap(cbuffer.cm_g.x, cbuffer.cm_g.y); std::swap(cbuffer.cm_g.y, cbuffer.cm_g.z);
+		std::swap(cbuffer.cm_b.x, cbuffer.cm_b.y); std::swap(cbuffer.cm_b.y, cbuffer.cm_b.z);
+	}
+	else if (m_srcParams.CSType == CS_GRAY) {
+		cbuffer.cm_g.x = cbuffer.cm_g.y;
+		cbuffer.cm_g.y = 0;
+		cbuffer.cm_b.x = cbuffer.cm_b.z;
+		cbuffer.cm_b.z = 0;
+	}
+
+	if (m_PSConvColorData.pConstants) {
+		m_pDeviceContext->UpdateSubresource(m_PSConvColorData.pConstants, 0, nullptr, &cbuffer, 0, 0);
+	}
+	else {
+		D3D11_BUFFER_DESC BufferDesc = {
+			.ByteWidth = sizeof(cbuffer),
+			.Usage = D3D11_USAGE_DEFAULT,
+			.BindFlags = D3D11_BIND_CONSTANT_BUFFER
+		};
+		D3D11_SUBRESOURCE_DATA InitData = { &cbuffer, 0, 0 };
+		EXECUTE_ASSERT(S_OK == m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_PSConvColorData.pConstants));
+	}
+}
+
 bool CDX11VideoProcessor::HandleHDRToggle()
 {
 	m_bHdrDisplaySwitching = true;
@@ -1762,6 +2070,41 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample *pSample)
 	m_RenderStats.copyticks = GetPreciseTick() - tick;
 	return hr;
 }
+HRESULT CDX11VideoProcessor::AlphaBlt(
+	ID3D11ShaderResourceView* pShaderResource,
+	ID3D11Texture2D* pRenderTarget,
+	ID3D11Buffer* pVertexBuffer,
+	D3D11_VIEWPORT* pViewPort,
+	ID3D11SamplerState* pSampler)
+{
+	ID3D11RenderTargetView* pRenderTargetView;
+	HRESULT hr = m_pDevice->CreateRenderTargetView(pRenderTarget, nullptr, &pRenderTargetView);
+
+	if (S_OK == hr) {
+		UINT Stride = sizeof(VERTEX);
+		UINT Offset = 0;
+
+		// Set resources
+		m_pDeviceContext->IASetInputLayout(m_pVSimpleInputLayout);
+		m_pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
+		m_pDeviceContext->RSSetViewports(1, pViewPort);
+		m_pDeviceContext->OMSetBlendState(m_pAlphaBlendState, nullptr, D3D11_DEFAULT_SAMPLE_MASK);
+		m_pDeviceContext->VSSetShader(m_pVS_Simple, nullptr, 0);
+		m_pDeviceContext->PSSetShader(m_pPS_BitmapToFrame, nullptr, 0);
+		m_pDeviceContext->PSSetShaderResources(0, 1, &pShaderResource);
+		m_pDeviceContext->PSSetSamplers(0, 1, &pSampler);
+		m_pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		m_pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Stride, &Offset);
+
+		// Draw textured quad onto render target
+		m_pDeviceContext->Draw(4, 0);
+
+		pRenderTargetView->Release();
+	}
+	DLogIf(FAILED(hr), L"AlphaBlt() : CreateRenderTargetView() failed with error {}", HR2Str(hr));
+
+	return hr;
+}
 HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTime)
 {
 	CheckPointer(m_TexSrcVideo.pTexture, E_FAIL);
@@ -2016,6 +2359,20 @@ void CDX11VideoProcessor::UpdateTexures()
 	{
 		hr = m_TexConvertOutput.CheckCreate(m_pDevice, m_InternalTexFmt, m_srcRectWidth, m_srcRectHeight, Tex2D_DefaultShaderRTarget);
 	}
+}
+UINT CDX11VideoProcessor::GetPostScaleSteps()
+{
+	UINT nSteps = m_pPostScaleShaders.size();
+	if (m_pPSCorrection) {
+		nSteps++;
+	}
+	if (m_pPSHalfOUtoInterlace) {
+		nSteps++;
+	}
+	if (m_bFinalPass) {
+		nSteps++;
+	}
+	return nSteps;
 }
 void CDX11VideoProcessor::UpdatePostScaleTexures()
 {
@@ -3620,19 +3977,19 @@ STDMETHODIMP CDX11VideoProcessor::UpdateAlphaBitmapParameters(const MFVideoAlpha
 		return MF_E_NOT_INITIALIZED;
 	}
 }
-CDX11VideoProcessor::~CDX11VideoProcessor() {}
-void CDX11VideoProcessor::ReleaseSwapChain() {}
-void CDX11VideoProcessor::ReleaseDevice() {}
-long CDX11VideoProcessor::CreatePShaderFromResource(ID3D11PixelShader **ppShader, unsigned int arg) { return E_NOTIMPL; }
-void CDX11VideoProcessor::ReleaseVP() {}
-long CDX11VideoProcessor::Init(HWND__ * const hwnd, bool flag, bool *pBool) { return E_NOTIMPL; }
-void CDX11VideoProcessor::SetShaderLuminanceParams() {}
-void CDX11VideoProcessor::SetShaderConvertColorParams() {}
-long CDX11VideoProcessor::AlphaBlt(ID3D11ShaderResourceView* pSRV, ID3D11Texture2D* pTex, ID3D11Buffer* pBuffer, D3D11_VIEWPORT* pVP, ID3D11SamplerState* pSS) { return E_NOTIMPL; }
+//CDX11VideoProcessor::~CDX11VideoProcessor() {}
+//void CDX11VideoProcessor::ReleaseSwapChain() {}
+//void CDX11VideoProcessor::ReleaseDevice() {}
+//long CDX11VideoProcessor::CreatePShaderFromResource(ID3D11PixelShader **ppShader, unsigned int arg) { return E_NOTIMPL; }
+//void CDX11VideoProcessor::ReleaseVP() {}
+//long CDX11VideoProcessor::Init(HWND__ * const hwnd, bool flag, bool *pBool) { return E_NOTIMPL; }
+//void CDX11VideoProcessor::SetShaderLuminanceParams() {}
+//void CDX11VideoProcessor::SetShaderConvertColorParams() {}
+//long CDX11VideoProcessor::AlphaBlt(ID3D11ShaderResourceView* pSRV, ID3D11Texture2D* pTex, ID3D11Buffer* pBuffer, D3D11_VIEWPORT* pVP, ID3D11SamplerState* pSS) { return E_NOTIMPL; }
 unsigned int CDX11VideoProcessor::GetPostScaleSteps() { return 0; }
-long CDX11VideoProcessor::TextureResizeShader(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, int arg, bool flag) { return E_NOTIMPL; }
-long CDX11VideoProcessor::TextureCopyRect(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, ID3D11Buffer* pBuffer, int arg, bool flag) { return E_NOTIMPL; }
-void CDX11VideoProcessor::SetCallbackDevice()
+//long CDX11VideoProcessor::TextureResizeShader(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, int arg, bool flag) { return E_NOTIMPL; }
+//long CDX11VideoProcessor::TextureCopyRect(const Tex2D_t &src, ID3D11Texture2D* pDest, const CRect &srcRect, const CRect &dstRect, ID3D11PixelShader* pPS, ID3D11Buffer* pBuffer, int arg, bool flag) { return E_NOTIMPL; }
+//void CDX11VideoProcessor::SetCallbackDevice()
 {
 	if (!m_bCallbackDeviceIsSet && m_pDevice && m_pFilter->m_pSub11CallBack) {
 		m_bCallbackDeviceIsSet = SUCCEEDED(m_pFilter->m_pSub11CallBack->SetDevice11(m_pDevice));
