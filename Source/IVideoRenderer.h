@@ -248,20 +248,6 @@ struct Settings_t {
 	}
 };
 
-// HDR Shader Parameters structure for GPU
-struct HDRShaderParams {
-	float hdr_display_max_nits;
-	float hdr_content_max_nits;
-	float sdr_display_nits;
-	float tone_mapping_exposure;
-	float dynamic_range_compression;
-	float shadow_detail_enhancement;
-	float color_volume_adaptation;
-	float scene_adaptation_strength;
-	float highlight_recovery;
-	float saturation_boost;
-};
-
 interface __declspec(uuid("1AB00F10-5F55-42AC-B53F-38649F11BE3E"))
 IVideoRenderer : public IUnknown {
 	STDMETHOD(GetVideoProcessorInfo) (std::wstring& str) PURE;
@@ -271,10 +257,4 @@ IVideoRenderer : public IUnknown {
 	STDMETHOD_(void, SetSettings(const Settings_t& settings)) PURE;
 
 	STDMETHOD(SaveSettings()) PURE;
-	
-	// HDR-specific methods
-	STDMETHOD(SetHDRShaderParams(const HDRShaderParams& params)) PURE;
-	STDMETHOD(GetHDRShaderParams(HDRShaderParams& params)) PURE;
-	STDMETHOD_(bool, IsHDRActive()) PURE;
-	STDMETHOD(ReloadHDRShaders()) PURE;
 };
