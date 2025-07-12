@@ -6,6 +6,8 @@ on:
   pull_request:
     branches:
       - hdr-enhancement
+  workflow_dispatch: # This line enables manual runs
+
 jobs:
   build:
     runs-on: windows-2022
