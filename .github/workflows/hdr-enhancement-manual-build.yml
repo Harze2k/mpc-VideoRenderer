@@ -195,6 +195,8 @@ jobs:
                     }
                 }
             }
+            
+          }
                 Write-Host "---------------------------------------" -ForegroundColor Red
       - name: Verify build outputs
         run: >
