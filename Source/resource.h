@@ -2,6 +2,7 @@
 // Microsoft Visual C++ generated include file.
 // Used by MpcVideoRenderer.rc
 //
+
 #define IDD_MAINPROPPAGE                102
 #define IDD_INFOPROPPAGE                103
 #define IDS_MAINPROPPAGE_TITLE          104
@@ -85,10 +86,29 @@
 #define IDF_PS_11_HALFOU_TO_INTERLACE   870
 #define IDF_PS_11_FINAL_PASS            880
 #define IDF_PS_11_FINAL_PASS_10         881
+#define IDF_PS_11_FIX_HDR10             882
 #define IDF_PS_11_TEST                  900
+
+#define IDS_TT_USE_D3D11                901
+#define IDS_TT_TEXTURE_FORMAT           902
+#define IDS_TT_SHOW_STATS               903
+#define IDS_TT_HDR_PASSTHROUGH          904
+#define IDS_TT_HDR_TONE_MAPPING         905
+#define IDS_TT_HDR_DISPLAY_NITS         906
+#define IDS_TT_DYNAMIC_RANGE            907
+#define IDS_TT_SHADOW_DETAIL            908
+#define IDS_TT_COLOR_VOLUME             909
+#define IDS_TT_SCENE_ADAPT              910
+#define IDS_TT_CONVERT_SDR              911
+#define IDS_TT_SDR_NITS                 912
+#define IDS_TT_USE_DITHERING            913
+#define IDS_TT_EXCLUSIVE_FS             914
+#define IDS_TT_VBLANK                   915
+#define IDS_TT_FRAME_TIME               916
+#define IDS_TT_REINIT_DISPLAY           917
+
 #define IDC_EDIT1                       1001
 #define IDC_EDIT2                       1002
-#define IDC_EDIT3                       1003
 #define IDC_EDIT_DISPLAYMAX             1003
 #define IDC_STATIC1                     1011
 #define IDC_STATIC2                     1012
@@ -125,21 +145,32 @@
 #define IDC_COMBO6                      1046
 #define IDC_COMBO7                      1047
 #define IDC_COMBO8                      1048
+#define IDC_COMBO9                      1066
 #define IDC_BUTTON1                     1051
 #define IDC_SLIDER1                     1061
 #define IDC_SLIDER2                     1062
-#define IDC_COMBO9                      1066
+#define IDC_SLIDER3                     1098
+#define IDC_SLIDER4                     1099
+#define IDC_SLIDER5                     1100
+#define IDC_SLIDER6                     1101
 #define IDC_STATIC99                    1067
-#define IDF_PS_11_FIX_HDR10             1068
-#define IDC_STATIC100                   1068
-
+#define IDC_STATIC100                   1088
+#define IDC_STATIC101                   1090
+#define IDC_STATIC102                   1091
+#define IDC_STATIC103                   1092
+#define IDC_STATIC104                   1093
+#define IDC_STATIC105                   1094
+#define IDC_EDIT_DRC                    1102
+#define IDC_EDIT_SHADOW                 1103
+#define IDC_EDIT_COLORVOL               1104
+#define IDC_EDIT_SCENE                  1105
 // Next default values for new objects
 // 
 #ifdef APSTUDIO_INVOKED
 #ifndef APSTUDIO_READONLY_SYMBOLS
-#define _APS_NEXT_RESOURCE_VALUE        106
+#define _APS_NEXT_RESOURCE_VALUE        107
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define _APS_NEXT_CONTROL_VALUE         1068
+#define _APS_NEXT_CONTROL_VALUE         1106
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

@@ -28,10 +28,16 @@ class __declspec(uuid("DA46D181-07D6-441D-B314-019AEB10148A"))
 	CVRMainPPage : public CBasePropertyPage, public CWindow
 {
 	CComQIPtr<IVideoRenderer> m_pVideoRenderer;
-
 	Settings_t m_SetsPP;
+	HWND m_hToolTip = nullptr;
 
 	int m_oldSDRDisplayNits = SDR_NITS_DEF;
+
+	// HDR parameter tracking
+	float m_oldHdrDynamicRangeCompression;
+	float m_oldHdrShadowDetail;
+	float m_oldHdrColorVolumeAdaptation;
+	float m_oldHdrSceneAdaptation;
 
 public:
 	CVRMainPPage(LPUNKNOWN lpunk, HRESULT* phr);
@@ -40,10 +46,14 @@ public:
 private:
 	void SetControls();
 	void EnableControls();
+	void UpdateHdrParameterDisplays();
+	void AddToolTip(int nID, int nStringID);
 
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;
+	HRESULT OnApplyChanges() override;
+
 	void SetDirty()
 	{
 		m_bDirty = TRUE;
@@ -51,24 +61,31 @@ private:
 			m_pPageSite->OnStatusChange(PROPPAGESTATUS_DIRTY);
 		}
 	}
+
 	INT_PTR OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) override;
-	HRESULT OnApplyChanges() override;
+
+public:
+	DECLARE_IUNKNOWN
+	STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void** ppv);
 };
 
 // CVRInfoPPage
 
-class __declspec(uuid("D697132B-FCA4-4401-8869-D3B39D0750DB"))
+class __declspec(uuid("6AC2FC16-C17B-4CD3-8306-8B1F7B70E8FB"))
 	CVRInfoPPage : public CBasePropertyPage, public CWindow
 {
-	HFONT m_hMonoFont = nullptr;
 	CComQIPtr<IVideoRenderer> m_pVideoRenderer;
+	HFONT m_hMonoFont = nullptr;
 
 public:
 	CVRInfoPPage(LPUNKNOWN lpunk, HRESULT* phr);
 	~CVRInfoPPage();
 
-private:
 	HRESULT OnConnect(IUnknown* pUnknown) override;
 	HRESULT OnDisconnect() override;
 	HRESULT OnActivate() override;
+
+public:
+	DECLARE_IUNKNOWN
+	STDMETHODIMP NonDelegatingQueryInterface(REFIID riid, void** ppv);
 };

@@ -23,6 +23,7 @@
 #include "Helper.h"
 #include "DisplayConfig.h"
 #include "PropPage.h"
+#include <CommCtrl.h>
 
 void SetCursor(HWND hWnd, LPCWSTR lpCursorName)
 {
@@ -65,10 +66,7 @@ void ComboBox_SelectByItemData(HWND hWnd, int nIDComboBox, LONG_PTR data)
 	}
 }
 
-
 // CVRMainPPage
-
-// https://msdn.microsoft.com/ru-ru/library/windows/desktop/dd375010(v=vs.85).aspx
 
 CVRMainPPage::CVRMainPPage(LPUNKNOWN lpunk, HRESULT* phr) :
 	CBasePropertyPage(L"MainProp", lpunk, IDD_MAINPROPPAGE, IDS_MAINPROPPAGE_TITLE)
@@ -79,6 +77,19 @@ CVRMainPPage::CVRMainPPage(LPUNKNOWN lpunk, HRESULT* phr) :
 CVRMainPPage::~CVRMainPPage()
 {
 	DLog(L"~CVRMainPPage()");
+}
+
+void CVRMainPPage::AddToolTip(int nID, int nStringID)
+{
+	if (!m_hToolTip) return;
+
+	TOOLINFOW ti = { 0 };
+	ti.cbSize = sizeof(TOOLINFOW);
+	ti.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+	ti.hwnd = m_hWnd;
+	ti.uId = (UINT_PTR)GetDlgItem(nID);
+	ti.lpszText = MAKEINTRESOURCEW(nStringID);
+	SendMessage(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM)&ti);
 }
 
 void CVRMainPPage::SetControls()
@@ -135,11 +146,32 @@ void CVRMainPPage::SetControls()
 
 	if (!(m_SetsPP.fHdrDisplayMaxNits >= 1.0f && m_SetsPP.fHdrDisplayMaxNits <= 10000.0f))
 	{
-		m_SetsPP.fHdrDisplayMaxNits = 1000.0f;
+		m_SetsPP.fHdrDisplayMaxNits = 2000.0f;
 	}
 	wchar_t buffer[32] = {};
 	swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
 	SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
+
+	// Enhanced HDR Parameters - Initialize sliders
+	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETRANGE, 1, MAKELONG(0, 200));  // 0.0-2.0 range (0-200)  
+	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETRANGE, 1, MAKELONG(0, 100));  // 0.0-1.0 range (0-100)
+
+	// Set current values
+	SendDlgItemMessageW(IDC_SLIDER3, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrDynamicRangeCompression * 100));
+	SendDlgItemMessageW(IDC_SLIDER4, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrShadowDetail * 100));
+	SendDlgItemMessageW(IDC_SLIDER5, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrColorVolumeAdaptation * 100));
+	SendDlgItemMessageW(IDC_SLIDER6, TBM_SETPOS, 1, (LONG)(m_SetsPP.fHdrSceneAdaptation * 100));
+
+	// Update edit boxes
+	UpdateHdrParameterDisplays();
+
+	// Store old values
+	m_oldHdrDynamicRangeCompression = m_SetsPP.fHdrDynamicRangeCompression;
+	m_oldHdrShadowDetail = m_SetsPP.fHdrShadowDetail;
+	m_oldHdrColorVolumeAdaptation = m_SetsPP.fHdrColorVolumeAdaptation;
+	m_oldHdrSceneAdaptation = m_SetsPP.fHdrSceneAdaptation;
 }
 
 void CVRMainPPage::EnableControls()
@@ -172,8 +204,40 @@ void CVRMainPPage::EnableControls()
 	GetDlgItem(IDC_STATIC8).EnableWindow(m_SetsPP.bConvertToSdr);
 	GetDlgItem(IDC_EDIT1).EnableWindow(m_SetsPP.bConvertToSdr);
 	GetDlgItem(IDC_SLIDER2).EnableWindow(m_SetsPP.bConvertToSdr);
-	
+
 	GetDlgItem(IDC_EDIT_DISPLAYMAX).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+
+	// Enhanced HDR Parameters controls
+	GetDlgItem(IDC_STATIC101).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_STATIC102).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_STATIC103).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_STATIC104).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_STATIC105).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_SLIDER3).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_SLIDER4).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_SLIDER5).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_SLIDER6).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_EDIT_DRC).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_EDIT_SHADOW).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_EDIT_COLORVOL).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+	GetDlgItem(IDC_EDIT_SCENE).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
+}
+
+void CVRMainPPage::UpdateHdrParameterDisplays()
+{
+	wchar_t buffer[16];
+
+	swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrDynamicRangeCompression);
+	SetDlgItemTextW(IDC_EDIT_DRC, buffer);
+
+	swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrShadowDetail);
+	SetDlgItemTextW(IDC_EDIT_SHADOW, buffer);
+
+	swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrColorVolumeAdaptation);
+	SetDlgItemTextW(IDC_EDIT_COLORVOL, buffer);
+
+	swprintf_s(buffer, L"%.2f", m_SetsPP.fHdrSceneAdaptation);
+	SetDlgItemTextW(IDC_EDIT_SCENE, buffer);
 }
 
 HRESULT CVRMainPPage::OnConnect(IUnknown *pUnk)
@@ -193,6 +257,11 @@ HRESULT CVRMainPPage::OnDisconnect()
 	if (m_pVideoRenderer == nullptr) {
 		return E_UNEXPECTED;
 	}
+	
+	if (m_hToolTip) {
+		::DestroyWindow(m_hToolTip);
+		m_hToolTip = nullptr;
+	}
 
 	if (m_SetsPP.iSDRDisplayNits != m_oldSDRDisplayNits) {
 		// OK or Apply buttons were not pressed. cancel the settings.
@@ -210,6 +279,13 @@ HRESULT CVRMainPPage::OnActivate()
 {
 	// set m_hWnd for CWindow
 	m_hWnd = m_hwnd;
+
+	m_hToolTip = CreateWindowExW(WS_EX_TOPMOST, TOOLTIPS_CLASSW, NULL,
+								 WS_POPUP | TTS_NOPREFIX | TTS_ALWAYSTIP,
+								 CW_USEDEFAULT, CW_USEDEFAULT,
+								 CW_USEDEFAULT, CW_USEDEFAULT,
+								 m_hWnd, NULL, g_hInst, NULL);
+    SendMessage(m_hToolTip, TTM_SETMAXTIPWIDTH, 0, 300);
 
 	m_pVideoRenderer->GetSettings(m_SetsPP);
 	m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
@@ -284,12 +360,29 @@ HRESULT CVRMainPPage::OnActivate()
 
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
-	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
+	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES Enhanced", 1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
-	
+
 	SetControls();
+	
+	AddToolTip(IDC_CHECK1, IDS_TT_USE_D3D11);
+    AddToolTip(IDC_COMBO1, IDS_TT_TEXTURE_FORMAT);
+    AddToolTip(IDC_CHECK2, IDS_TT_SHOW_STATS);
+    AddToolTip(IDC_COMBO9, IDS_TT_HDR_TONE_MAPPING);
+    AddToolTip(IDC_EDIT_DISPLAYMAX, IDS_TT_HDR_DISPLAY_NITS);
+    AddToolTip(IDC_SLIDER3, IDS_TT_DYNAMIC_RANGE);
+    AddToolTip(IDC_SLIDER4, IDS_TT_SHADOW_DETAIL);
+    AddToolTip(IDC_SLIDER5, IDS_TT_COLOR_VOLUME);
+    AddToolTip(IDC_SLIDER6, IDS_TT_SCENE_ADAPT);
+    AddToolTip(IDC_CHECK14, IDS_TT_CONVERT_SDR);
+    AddToolTip(IDC_SLIDER2, IDS_TT_SDR_NITS);
+    AddToolTip(IDC_CHECK10, IDS_TT_USE_DITHERING);
+    AddToolTip(IDC_CHECK11, IDS_TT_EXCLUSIVE_FS);
+    AddToolTip(IDC_CHECK15, IDS_TT_VBLANK);
+    AddToolTip(IDC_CHECK13, IDS_TT_FRAME_TIME);
+    AddToolTip(IDC_CHECK16, IDS_TT_REINIT_DISPLAY);
 
 	SetCursor(m_hWnd, IDC_ARROW);
 	SetCursor(m_hWnd, IDC_COMBO1, IDC_HAND);
