@@ -21,6 +21,7 @@
 #pragma once
 
 #include <dxva2api.h>
+#include <algorithm> // For std::clamp
 
 enum :int {
 	TEXFMT_AUTOINT = 0,
@@ -79,14 +80,40 @@ enum :int {
 	HDRTD_OnOff
 };
 
+// HDR Tone Mapping Types
+enum :int {
+	HDR_TM_ACES = 1,
+	HDR_TM_REINHARD = 2,
+	HDR_TM_HABLE = 3,
+	HDR_TM_MOBIUS = 4,
+	HDR_TM_COUNT
+};
+
 #define SDR_NITS_DEF 125
 #define SDR_NITS_MIN  25
 #define SDR_NITS_MAX 400
 #define SDR_NITS_STEP  5
 
-#define HDR_NITS_DEF 1000.0f
+#define HDR_NITS_DEF 2000.0f
 #define HDR_NITS_MIN 1.0f
 #define HDR_NITS_MAX 10000.0f
+
+// HDR Enhancement parameter ranges
+#define HDR_DRC_MIN 0.0f
+#define HDR_DRC_MAX 1.0f
+#define HDR_DRC_DEF 0.5f
+
+#define HDR_SHADOW_MIN 0.0f
+#define HDR_SHADOW_MAX 2.0f
+#define HDR_SHADOW_DEF 1.2f
+
+#define HDR_COLORVOL_MIN 0.0f
+#define HDR_COLORVOL_MAX 1.0f
+#define HDR_COLORVOL_DEF 0.8f
+
+#define HDR_SCENE_MIN 0.0f
+#define HDR_SCENE_MAX 1.0f
+#define HDR_SCENE_DEF 0.6f
 
 struct VPEnableFormats_t {
 	bool bNV12;
@@ -125,6 +152,20 @@ struct Settings_t {
 	bool bHdrLocalToneMapping;
 	int  iHdrLocalToneMappingType;
 	float fHdrDisplayMaxNits;
+	
+	// Enhanced HDR Parameters
+	float fHdrDynamicRangeCompression;
+	float fHdrShadowDetail;
+	float fHdrColorVolumeAdaptation;
+	float fHdrSceneAdaptation;
+	
+	// Additional HDR parameters for future expansion
+	float fHdrHighlightRecovery;
+	float fHdrSaturationBoost;
+	float fHdrToneMappingExposure;
+	float fHdrContentMaxNits;
+	float fHdrGammaCorrection;
+	float fHdrColorTemperature;
 
 	Settings_t() {
 		SetDefault();
@@ -160,20 +201,47 @@ struct Settings_t {
 		bReinitByDisplay                = false;
 		bHdrPreferDoVi                  = false;
 		if (IsWindows10OrGreater()) {
-			bHdrLocalToneMapping		= true;
+			bHdrLocalToneMapping        = true;
 			bHdrPassthrough             = false;
-			iHdrLocalToneMappingType    = 1;
-			fHdrDisplayMaxNits			= 1000.0f;
+			iHdrLocalToneMappingType    = HDR_TM_ACES;
+			fHdrDisplayMaxNits          = HDR_NITS_DEF;
 		} else {
-			bHdrLocalToneMapping		= false;
+			bHdrLocalToneMapping        = false;
 			bHdrPassthrough             = false;
-			iHdrLocalToneMappingType	= 0;
-			fHdrDisplayMaxNits			= 1000.0f;
+			iHdrLocalToneMappingType    = 0;
+			fHdrDisplayMaxNits          = HDR_NITS_DEF;
 		}
 		iHdrToggleDisplay               = HDRTD_Disabled;
 		bConvertToSdr                   = true;
 		iHdrOsdBrightness               = 0;
 		iSDRDisplayNits                 = SDR_NITS_DEF;
+		
+		fHdrDynamicRangeCompression     = HDR_DRC_DEF;
+		fHdrShadowDetail                = HDR_SHADOW_DEF;
+		fHdrColorVolumeAdaptation       = HDR_COLORVOL_DEF;
+		fHdrSceneAdaptation             = HDR_SCENE_DEF;
+		
+		fHdrHighlightRecovery           = 0.3f;
+		fHdrSaturationBoost             = 1.1f;
+		fHdrToneMappingExposure         = 1.0f;
+		fHdrContentMaxNits              = 4000.0f;
+		fHdrGammaCorrection             = 2.2f;
+		fHdrColorTemperature            = 6500.0f;
+	}
+
+	void ValidateHDRParams() {
+		fHdrDynamicRangeCompression = std::clamp(fHdrDynamicRangeCompression, HDR_DRC_MIN, HDR_DRC_MAX);
+		fHdrShadowDetail = std::clamp(fHdrShadowDetail, HDR_SHADOW_MIN, HDR_SHADOW_MAX);
+		fHdrColorVolumeAdaptation = std::clamp(fHdrColorVolumeAdaptation, HDR_COLORVOL_MIN, HDR_COLORVOL_MAX);
+		fHdrSceneAdaptation = std::clamp(fHdrSceneAdaptation, HDR_SCENE_MIN, HDR_SCENE_MAX);
+		fHdrDisplayMaxNits = std::clamp(fHdrDisplayMaxNits, HDR_NITS_MIN, HDR_NITS_MAX);
+		
+		fHdrHighlightRecovery = std::clamp(fHdrHighlightRecovery, 0.0f, 1.0f);
+		fHdrSaturationBoost = std::clamp(fHdrSaturationBoost, 0.5f, 2.0f);
+		fHdrToneMappingExposure = std::clamp(fHdrToneMappingExposure, 0.1f, 3.0f);
+		fHdrContentMaxNits = std::clamp(fHdrContentMaxNits, 100.0f, 10000.0f);
+		fHdrGammaCorrection = std::clamp(fHdrGammaCorrection, 1.8f, 2.6f);
+		fHdrColorTemperature = std::clamp(fHdrColorTemperature, 3000.0f, 9000.0f);
 	}
 };
 
@@ -182,8 +250,8 @@ IVideoRenderer : public IUnknown {
 	STDMETHOD(GetVideoProcessorInfo) (std::wstring& str) PURE;
 	STDMETHOD_(bool, GetActive()) PURE;
 
-	STDMETHOD_(void, GetSettings(Settings_t& setings)) PURE;
-	STDMETHOD_(void, SetSettings(const Settings_t& setings)) PURE;
+	STDMETHOD_(void, GetSettings(Settings_t& settings)) PURE;
+	STDMETHOD_(void, SetSettings(const Settings_t& settings)) PURE;
 
 	STDMETHOD(SaveSettings()) PURE;
 };
