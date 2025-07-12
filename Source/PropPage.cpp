@@ -440,6 +440,14 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 				SetControls();
 				EnableControls();
 				SetDirty();
+				m_fDynamicRangeCompression = 0.5f;
+				m_fShadowDetail = 1.2f;
+				m_fColorVolumeAdaptation = 0.8f;
+				m_fSceneAdaptation = 0.6f;
+				
+				// Apply immediately (optional)
+				SetHDR10ShaderParams(...);  // Uncomment for instant effect
+				
 				return (LRESULT)1;
 			}
 		}

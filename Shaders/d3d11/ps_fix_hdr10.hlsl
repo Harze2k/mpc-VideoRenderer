@@ -17,13 +17,13 @@ cbuffer RootConstants : register(b0)
     float maxFALL;
     float displayMaxNits;
     uint selection;
+    
+    // Enhanced HDR parameters from UI sliders
+    float dynamicRangeCompression;
+    float shadowDetail;
+    float colorVolumeAdaptation;
+    float sceneAdaptation;
 };
-
-// Use fixed default values for enhanced parameters
-static const float dynamicRangeCompression = 0.5f;
-static const float shadowDetail = 1.2f;
-static const float colorVolumeAdaptation = 0.8f;
-static const float sceneAdaptation = 0.6f;
 
 // Rec.2020 color primaries and white point (for Dolby Vision)
 static const float3x3 REC2020_TO_XYZ = float3x3(
