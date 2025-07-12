@@ -39,18 +39,6 @@
 bool g_bPresent = false;
 bool g_bCreateSwapChain = false;
 
-// NOTE: This was defined at global scope in the original file, which is incorrect.
-// It is now a proper member function.
-/*
-enum class ConvertShaderMode
-{
-	None,
-	ToSDR,
-	ToPQ,
-	ToHLG,
-};
-*/
-
 bool ToggleHDR(const DisplayConfig_t &displayConfig, const bool bEnableAdvancedColor);
 typedef BOOL(WINAPI *pSetWindowPos)(
 	_In_ HWND hWnd,
@@ -206,12 +194,6 @@ static HRESULT FillVertexBuffer(ID3D11DeviceContext *pDeviceContext, ID3D11Buffe
 	pDeviceContext->Unmap(pVertexBuffer, 0);
 	return hr;
 }
-
-// =========================================================================================
-// THIS ENTIRE FUNCTION WAS A BUGGY, MISPLACED COPY. IT HAS BEEN REMOVED.
-// The real logic is now correctly placed inside the Configure() and InitMediaType() methods.
-// =========================================================================================
-
 static void TextureBlt11(
 	ID3D11DeviceContext *pDeviceContext,
 	ID3D11RenderTargetView *pRenderTargetView, D3D11_VIEWPORT &viewport,
@@ -224,7 +206,7 @@ static void TextureBlt11(
 	ID3D11Buffer *pVertexBuffer)
 {
 	ASSERT(pDeviceContext);
-	ASSERT(pRenderTargetView); 
+	ASSERT(pRenderTargetView);
 	const UINT Stride = sizeof(VERTEX);
 	const UINT Offset = 0;
 	pDeviceContext->IASetInputLayout(pInputLayout);
@@ -318,6 +300,7 @@ void CDX11VideoProcessor::SetCallbackDevice()
 CDX11VideoProcessor::CDX11VideoProcessor(CMpcVideoRenderer *pFilter, const Settings_t &config, HRESULT &hr)
 	: CVideoProcessor(pFilter)
 {
+	m_srcExFmt = {}; // Initialize struct
 	m_bShowStats = config.bShowStats;
 	m_iResizeStats = config.iResizeStats;
 	m_iTexFormat = config.iTexFormat;
@@ -426,9 +409,7 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 		}
 	}
 }
-// FIX: Corrected invalid C++ syntax from "this->" and "lumParams" to a valid function definition.
-// The implementation still ignores the 'params' argument, which might be a bug, but it will compile.
-void CDX11VideoProcessor::SetShaderLuminanceParams(ShaderLuminanceParams_t& params)
+void CDX11VideoProcessor::SetShaderLuminanceParams(ShaderLuminanceParams_t &params)
 {
 	FLOAT cbuffer[4] = {10000.0f / m_iSDRDisplayNits, 0, 0, 0};
 	if (m_pCorrectionConstants_HDR)
@@ -676,20 +657,18 @@ HRESULT CDX11VideoProcessor::MemCopyToTexSrcVideo(const BYTE *srcData, const int
 	HRESULT hr = S_FALSE;
 	D3D11_MAPPED_SUBRESOURCE mappedResource = {};
 
-	// This function was fundamentally flawed. It assumed m_TexSrcVideo had members pTexture2/3.
-	// The correct approach with TexEx_t is to map each texture plane individually.
 	if (m_TexSrcVideo.pTexture)
 	{
 		hr = m_pDeviceContext->Map(m_TexSrcVideo.pTexture, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 		if (SUCCEEDED(hr))
 		{
-			const BYTE* src = (srcPitch < 0) ? srcData + srcPitch * (1 - (int)m_srcLines) : srcData;
+			const BYTE *src = (srcPitch < 0) ? srcData + srcPitch * (1 - (int)m_srcLines) : srcData;
 			m_pCopyPlaneFn(m_srcLines, (BYTE *)mappedResource.pData, mappedResource.RowPitch, src, srcPitch);
 			m_pDeviceContext->Unmap(m_TexSrcVideo.pTexture, 0);
 		}
 	}
 
-	if (m_TexSrcVideo.pTexture2) 
+	if (m_TexSrcVideo.pTexture2)
 	{
 		hr = m_pDeviceContext->Map(m_TexSrcVideo.pTexture2, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 		if (SUCCEEDED(hr))
@@ -697,15 +676,16 @@ HRESULT CDX11VideoProcessor::MemCopyToTexSrcVideo(const BYTE *srcData, const int
 			const UINT cromaH = m_srcHeight / m_srcParams.pDX11Planes->div_chroma_h;
 			const int cromaPitch = (m_TexSrcVideo.pTexture3) ? srcPitch / m_srcParams.pDX11Planes->div_chroma_w : srcPitch;
 			srcData += abs(srcPitch) * m_srcHeight;
-			m_pCopyPlaneFn(cromaH, (BYTE*)mappedResource.pData, mappedResource.RowPitch, srcData, cromaPitch);
+			m_pCopyPlaneFn(cromaH, (BYTE *)mappedResource.pData, mappedResource.RowPitch, srcData, cromaPitch);
 			m_pDeviceContext->Unmap(m_TexSrcVideo.pTexture2, 0);
+
 			if (m_TexSrcVideo.pTexture3)
 			{
 				hr = m_pDeviceContext->Map(m_TexSrcVideo.pTexture3, 0, D3D11_MAP_WRITE_DISCARD, 0, &mappedResource);
 				if (SUCCEEDED(hr))
 				{
 					srcData += cromaPitch * cromaH;
-					m_pCopyPlaneFn(cromaH, (BYTE*)mappedResource.pData, mappedResource.RowPitch, srcData, cromaPitch);
+					m_pCopyPlaneFn(cromaH, (BYTE *)mappedResource.pData, mappedResource.RowPitch, srcData, cromaPitch);
 					m_pDeviceContext->Unmap(m_TexSrcVideo.pTexture3, 0);
 				}
 			}
@@ -784,7 +764,6 @@ void CDX11VideoProcessor::ReleaseDevice()
 	m_Alignment.cx = {};
 	if (m_pDeviceContext)
 	{
-		// need ClearState() (see ReleaseVP()) and Flush() for ID3D11DeviceContext when using DXGI_SWAP_EFFECT_DISCARD in Windows 8/8.1
 		m_pDeviceContext->Flush();
 	}
 	m_pDeviceContext.Release();
@@ -1041,7 +1020,7 @@ HRESULT CDX11VideoProcessor::InitSwapChain(bool bWindowChanged)
 	{
 		HandleHDRToggle();
 		UpdateBitmapShader();
-		if ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && SourceIsPQorHLG(m_srcExFmt_HDRParams))
+		if ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && SourceIsPQorHLG(m_srcExFmt.HDRParams))
 		{
 			m_bHdrAllowSwitchDisplay = false;
 			InitMediaType(&m_pFilter->m_inputMT);
@@ -1281,7 +1260,6 @@ void CDX11VideoProcessor::SetShaderConvertColorParams()
 	}
 	else if (!m_PSConvColorData.bEnable && m_PSConvColorData.pVertexBuffer)
 	{
-		// If color conversion is disabled, release the vertex buffer.
 		SAFE_RELEASE(m_PSConvColorData.pVertexBuffer);
 	}
 }
@@ -1626,10 +1604,10 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 	m_pPSHDR10ToneMapping_HDR.Release();
 	m_pHDR10ToneMappingConstants_HDR.Release();
 	UpdateTexParams(FmtParams.CDepth);
-	if (m_bHdrAllowSwitchDisplay && m_srcVideoTransferFunction != m_srcExFmt_HDRParams.VideoTransferFunction)
+	if (m_bHdrAllowSwitchDisplay && m_srcVideoTransferFunction != m_srcExFmt.HDRParams.VideoTransferFunction)
 	{
 		auto ret = HandleHDRToggle();
-		if (!ret && ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && m_bHdrSupport && SourceIsPQorHLG(m_srcExFmt_HDRParams) && !m_pDXGISwapChain4))
+		if (!ret && ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && m_bHdrSupport && SourceIsPQorHLG(m_srcExFmt.HDRParams) && !m_pDXGISwapChain4))
 		{
 			ret = true;
 		}
@@ -1644,7 +1622,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 		ReleaseSwapChain();
 		Init(m_hWnd, false); // Calls Init, which calls InitMediaType again.
 	}
-	m_srcVideoTransferFunction = m_srcExFmt_HDRParams.VideoTransferFunction;
+	m_srcVideoTransferFunction = m_srcExFmt.HDRParams.VideoTransferFunction;
 	HRESULT hr = E_NOT_VALID_STATE;
 	if (FmtParams.VP11Format != DXGI_FORMAT_UNKNOWN)
 	{
@@ -1653,13 +1631,13 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 		{
 			UINT resId = 0;
 			m_pCorrectionConstants_HDR.Release();
-			bool bTransFunc22 = m_srcExFmt_HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_22 || m_srcExFmt_HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_709 || m_srcExFmt_HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_240M;
-			if (m_srcExFmt_HDRParams.VideoTransferFunction == MFVideoTransFunc_2084 && !(m_bHdrPassthroughSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping)) && m_bConvertToSdr)
+			bool bTransFunc22 = m_srcExFmt.HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_22 || m_srcExFmt.HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_709 || m_srcExFmt.HDRParams.VideoTransferFunction == DXVA2_VideoTransFunc_240M;
+			if (m_srcExFmt.HDRParams.VideoTransferFunction == MFVideoTransFunc_2084 && !(m_bHdrPassthroughSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping)) && m_bConvertToSdr)
 			{
 				resId = m_D3D11VP.IsPqSupported() ? IDF_PS_11_CONVERT_PQ_TO_SDR : IDF_PS_11_FIXCONVERT_PQ_TO_SDR;
 				m_strCorrection = L"PQ to SDR";
 			}
-			else if (m_srcExFmt_HDRParams.VideoTransferFunction == MFVideoTransFunc_HLG)
+			else if (m_srcExFmt.HDRParams.VideoTransferFunction == MFVideoTransFunc_HLG)
 			{
 				if (m_bHdrPassthroughSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping))
 				{
@@ -1671,13 +1649,13 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 					resId = IDF_PS_11_FIXCONVERT_HLG_TO_SDR;
 					m_strCorrection = L"HLG to SDR";
 				}
-				else if (m_srcExFmt_HDRParams.VideoPrimaries == MFVideoPrimaries_BT2020)
+				else if (m_srcExFmt.HDRParams.VideoPrimaries == MFVideoPrimaries_BT2020)
 				{
 					resId = IDF_PS_11_FIX_BT2020;
 					m_strCorrection = L"Fix BT.2020";
 				}
 			}
-			else if (bTransFunc22 && m_srcExFmt_HDRParams.VideoPrimaries == MFVideoPrimaries_BT2020)
+			else if (bTransFunc22 && m_srcExFmt.HDRParams.VideoPrimaries == MFVideoPrimaries_BT2020)
 			{
 				resId = IDF_PS_11_FIX_BT2020;
 				m_strCorrection = L"Fix BT.2020";
@@ -1686,7 +1664,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 			{
 				EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSCorrection_HDR, resId));
 				DLogIf(m_pPSCorrection_HDR, L"CDX11VideoProcessor::InitMediaType() m_pPSCorrection_HDR('{}') created", m_strCorrection);
-				ShaderLuminanceParams_t lumParams = {}; // Create a dummy params struct
+				ShaderLuminanceParams_t lumParams = {};
 				SetShaderLuminanceParams(lumParams);
 			}
 			if (m_bHdrSupport && m_bHdrLocalToneMapping)
@@ -1718,7 +1696,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 		if (SUCCEEDED(hr))
 		{
 			SetShaderConvertColorParams();
-			ShaderLuminanceParams_t lumParams = {}; // Create a dummy params struct
+			ShaderLuminanceParams_t lumParams = {};
 			SetShaderLuminanceParams(lumParams);
 		}
 	}
@@ -1733,7 +1711,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType *pmt)
 	}
 	return FALSE;
 }
-HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t ¶ms, const UINT width, const UINT height, const CMediaType *pmt)
+HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t &params, const UINT width, const UINT height, const CMediaType *pmt)
 {
 	if (!m_D3D11VP.IsVideoDeviceOk())
 	{
@@ -1742,7 +1720,7 @@ HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t ¶ms, const
 	const auto &dxgiFormat = params.VP11Format;
 	DLog(L"CDX11VideoProcessor::InitializeD3D11VP() started with input surface: {}, {} x {}", DXGIFormatToString(dxgiFormat), width, height);
 	m_TexSrcVideo.Release();
-	const bool bHdrPassthrough = m_bHdrDisplayModeEnabled && (SourceIsPQorHLG(m_srcExFmt_HDRParams) || (m_bVPUseRTXVideoHDR && params.CDepth == 8));
+	const bool bHdrPassthrough = m_bHdrDisplayModeEnabled && (SourceIsPQorHLG(m_srcExFmt.HDRParams) || (m_bVPUseRTXVideoHDR && params.CDepth == 8));
 	m_D3D11OutputFmt = m_InternalTexFmt;
 	HRESULT hr = m_D3D11VP.InitVideoProcessor(dxgiFormat, width, height, m_srcExFmt, m_bInterlaced, bHdrPassthrough, m_D3D11OutputFmt, &m_D3D11VP_StreamInfo);
 	if (FAILED(hr))
@@ -1760,7 +1738,7 @@ HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t ¶ms, const
 	m_bVPUseSuperRes = (m_D3D11VP_StreamInfo.SetSuperRes(superRes) == S_OK);
 	auto rtxHDR = m_bVPRTXVideoHDR && m_bHdrPassthroughSupport && m_bHdrPassthrough && m_iTexFormat != TEXFMT_8INT && !SourceIsHDR();
 	m_bVPUseRTXVideoHDR = (m_D3D11VP_StreamInfo.SetRTXVideoHDR(rtxHDR) == S_OK);
-	
+
 	bool bSwapChainNeedsReinit = false;
 	if ((m_bVPUseRTXVideoHDR && !m_pDXGISwapChain4) || (!m_bVPUseRTXVideoHDR && m_pDXGISwapChain4 && !SourceIsHDR()))
 	{
@@ -1769,7 +1747,7 @@ HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t ¶ms, const
 	if (bSwapChainNeedsReinit)
 	{
 		InitSwapChain(false);
-		InitMediaType(pmt);	
+		InitMediaType(pmt);
 		return S_OK;
 	}
 	hr = m_TexSrcVideo.Create(m_pDevice, dxgiFormat, width, height, Tex2D_DynamicShaderWriteNoSRV);
@@ -1786,7 +1764,7 @@ HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t ¶ms, const
 	DLog(L"CDX11VideoProcessor::InitializeD3D11VP() completed successfully");
 	return S_OK;
 }
-HRESULT CDX11VideoProcessor::InitializeTexVP(const FmtConvParams_t& params, const UINT width, const UINT height)
+HRESULT CDX11VideoProcessor::InitializeTexVP(const FmtConvParams_t &params, const UINT width, const UINT height)
 {
 	DLog(L"CDX11VideoProcessor::InitializeTexVP() started with input surface: {}, {} x {}", DXGIFormatToString(params.DX11Format), width, height);
 	HRESULT hr = m_TexSrcVideo.CreateEx(m_pDevice, params.DX11Format, params.pDX11Planes, width, height, Tex2D_DynamicShaderWrite);
@@ -1804,14 +1782,11 @@ HRESULT CDX11VideoProcessor::InitializeTexVP(const FmtConvParams_t& params, cons
 	DLog(L"CDX11VideoProcessor::InitializeTexVP() completed successfully");
 	return S_OK;
 }
-// ... (All previous functions up to and including GetAlignmentSize)
-
 void CDX11VideoProcessor::UpdatFrameProperties()
 {
 	m_srcPitch = m_srcWidth * m_srcParams.Packsize;
 	m_srcLines = m_srcHeight * m_srcParams.PitchCoeff / 2;
 }
-
 BOOL CDX11VideoProcessor::GetAlignmentSize(const CMediaType &mt, SIZE &Size)
 {
 	if (VerifyMediaType(&mt))
@@ -1908,7 +1883,6 @@ BOOL CDX11VideoProcessor::GetAlignmentSize(const CMediaType &mt, SIZE &Size)
 	}
 	return FALSE;
 }
-
 HRESULT CDX11VideoProcessor::ProcessSample(IMediaSample *pSample)
 {
 	REFERENCE_TIME rtStart, rtEnd;
@@ -1989,7 +1963,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample *pSample)
 	m_hdr10 = {};
 	if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
 	{
-		if (SourceIsPQorHLG(m_srcExFmt_HDRParams) && (m_bHdrPassthrough || m_bHdrLocalToneMapping))
+		if (SourceIsPQorHLG(m_srcExFmt.HDRParams) && (m_bHdrPassthrough || m_bHdrLocalToneMapping))
 		{
 			MediaSideDataHDR *hdr = nullptr;
 			size_t size = 0;
@@ -2031,7 +2005,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample *pSample)
 		{
 			m_nStereoSubtitlesOffsetInPixels = offset->offset[0];
 		}
-		if (m_srcParams.CSType == CS_YUV && (m_bHdrPreferDoVi || !SourceIsPQorHLG(m_srcExFmt_HDRParams)))
+		if (m_srcParams.CSType == CS_YUV && (m_bHdrPreferDoVi || !SourceIsPQorHLG(m_srcExFmt.HDRParams)))
 		{
 			MediaSideDataDOVIMetadata *pDOVIMetadata = nullptr;
 			hr = pMediaSideData->GetSideData(IID_MediaSideDataDOVIMetadata, (const BYTE **)&pDOVIMetadata, &size);
@@ -2115,7 +2089,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample *pSample)
 						hr = SetShaderDoviCurvesPoly();
 					}
 				}
-				if (doviStateChanged && !SourceIsPQorHLG(m_srcExFmt_HDRParams))
+				if (doviStateChanged && !SourceIsPQorHLG(m_srcExFmt.HDRParams))
 				{
 					ReleaseSwapChain();
 					Init(m_hWnd, false);
@@ -2209,7 +2183,7 @@ HRESULT CDX11VideoProcessor::AlphaBlt(
 	m_pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Stride, &Offset);
 	// Draw textured quad onto render target
 	m_pDeviceContext->Draw(4, 0);
-	
+
 	return hr;
 }
 HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTime)
@@ -2242,11 +2216,7 @@ HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTi
 		hr = Process(pBackBuffer, m_srcRect, m_videoRect, m_FieldDrawn == 2);
 	}
 	DrawSubtitles(pBackBuffer);
-	if (m_pPSHalfOUtoInterlace)
-	{
-        // This StepSetting call was misplaced and caused a crash.
-        // The logic for HalfOU->Interlace pass is inside the Process() function.
-	}
+
 	if (m_bShowStats)
 	{
 		hr = DrawStats(pBackBuffer);
@@ -2421,7 +2391,7 @@ void CDX11VideoProcessor::UpdateTexures()
 	{
 		return;
 	}
-	HRESULT hr = S_OK; 
+	HRESULT hr = S_OK;
 	if (m_D3D11VP_StreamInfo.IsReady())
 	{
 		if (m_bVPScaling)
@@ -2706,7 +2676,7 @@ HRESULT CDX11VideoProcessor::FinalPass(const Tex2D_t &Tex, ID3D11Texture2D *pRen
 	m_pDeviceContext->PSSetShaderResources(1, 1, views);
 	return hr;
 }
-void CDX11VideoProcessor::DrawSubtitles(ID3D11Texture2D* pRenderTargetTex)
+void CDX11VideoProcessor::DrawSubtitles(ID3D11Texture2D *pRenderTargetTex)
 {
 	HRESULT hr = S_OK;
 	CComPtr<ISubPic> pSubPic = m_pFilter->GetSubPic(m_rtStart);
@@ -2781,17 +2751,20 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect
 	}
 	else
 	{
-		pInputTexture = (Tex2D_t*)&m_TexSrcVideo;
+		pInputTexture = (Tex2D_t *)&m_TexSrcVideo;
 	}
+
 	if (numSteps)
 	{
 		UINT step = 0;
 		Tex2D_t *pTex = m_TexsPostScale.GetFirstTex();
 		ID3D11Texture2D *pRT = pTex->pTexture;
+
 		auto StepSetting = [&]()
 		{
+			if (step > 0)
+				pInputTexture = pTex;
 			step++;
-			pInputTexture = pTex;
 			if (step < numSteps)
 			{
 				pTex = m_TexsPostScale.GetNextTex();
@@ -2802,28 +2775,31 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect
 				pRT = pRenderTarget;
 			}
 		};
-		CRect rect;
-		rect.IntersectRect(dstRect, CRect(0, 0, pTex->desc.Width, pTex->desc.Height));
-		if (m_D3D11VP_StreamInfo.IsReady())
-		{
-			m_bVPScalingUseShaders = rSrc.Width() != dstRect.Width() || rSrc.Height() != dstRect.Height();
-		}
+
+		CRect currentDestRect = dstRect;
 		if (rSrc != dstRect || rotation != 0 || m_bFlip)
 		{
-			StepSetting();
-			hr = ResizeShaderPass(*pInputTexture, pRT, rSrc, dstRect, rotation);
+			m_bVPScalingUseShaders = true;
+			if (numSteps > 0)
+			{
+				StepSetting();
+				hr = ResizeShaderPass(*pInputTexture, pRT, rSrc, dstRect, rotation);
+				currentDestRect = CRect(0, 0, dstRect.Width(), dstRect.Height());
+			}
+			else
+			{
+				hr = ResizeShaderPass(*pInputTexture, pRenderTarget, rSrc, dstRect, rotation);
+			}
 		}
 		else
 		{
-			// If no resize is needed, the first pass processes the original input
-			// directly. The target will be the first post-scale texture.
-			pRT = pInputTexture == pTex ? pRenderTarget : pTex->pTexture;
+			m_bVPScalingUseShaders = false;
 		}
 
 		if (m_pPSCorrection_HDR)
 		{
 			StepSetting();
-			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSCorrection_HDR, m_pCorrectionConstants_HDR, 0, false);
+			hr = TextureCopyRect(*pInputTexture, pRT, currentDestRect, currentDestRect, m_pPSCorrection_HDR, m_pCorrectionConstants_HDR, 0, false);
 		}
 		if (m_pPSHDR10ToneMapping_HDR)
 		{
@@ -2839,7 +2815,7 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect
 				m_fHdrShadowDetail,
 				m_fHdrColorVolumeAdaptation,
 				m_fHdrSceneAdaptation);
-			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSHDR10ToneMapping_HDR, m_pHDR10ToneMappingConstants_HDR, 0, false);
+			hr = TextureCopyRect(*pInputTexture, pRT, currentDestRect, currentDestRect, m_pPSHDR10ToneMapping_HDR, m_pHDR10ToneMappingConstants_HDR, 0, false);
 		}
 		if (m_pPostScaleShaders.size())
 		{
@@ -2862,7 +2838,7 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect
 			for (UINT idx = 0; idx < m_pPostScaleShaders.size(); idx++)
 			{
 				StepSetting();
-				hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPostScaleShaders[idx].shader, m_pPostScaleConstants, 0, false);
+				hr = TextureCopyRect(*pInputTexture, pRT, currentDestRect, currentDestRect, m_pPostScaleShaders[idx].shader, m_pPostScaleConstants, 0, false);
 			}
 		}
 		if (m_pPSHalfOUtoInterlace)
@@ -2882,12 +2858,12 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect
 				memcpy(mr.pData, &ConstData, sizeof(ConstData));
 				m_pDeviceContext->Unmap(m_pHalfOUtoInterlaceConstantBuffer, 0);
 			}
-			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSHalfOUtoInterlace, m_pHalfOUtoInterlaceConstantBuffer, 0, false);
+			hr = TextureCopyRect(*pInputTexture, pRT, currentDestRect, currentDestRect, m_pPSHalfOUtoInterlace, m_pHalfOUtoInterlaceConstantBuffer, 0, false);
 		}
 		if (m_bFinalPass)
 		{
 			StepSetting();
-			hr = FinalPass(*pInputTexture, pRT, rect, rect);
+			hr = FinalPass(*pInputTexture, pRT, currentDestRect, currentDestRect);
 			m_bDitherUsed = true;
 		}
 	}
@@ -2922,7 +2898,7 @@ HRESULT CDX11VideoProcessor::SetWindowRect(const CRect &windowRect)
 HRESULT CDX11VideoProcessor::Reset()
 {
 	DLog(L"CDX11VideoProcessor::Reset()");
-	if ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && SourceIsPQorHLG(m_srcExFmt_HDRParams))
+	if ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && SourceIsPQorHLG(m_srcExFmt.HDRParams))
 	{
 		MONITORINFOEXW mi = {sizeof(mi)};
 		GetMonitorInfoW(MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTOPRIMARY), (MONITORINFO *)&mi);
@@ -2951,7 +2927,7 @@ HRESULT CDX11VideoProcessor::Reset()
 	}
 	return S_OK;
 }
-HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
+HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D **ppImg)
 {
 	CComPtr<ID3D11Texture2D> pRGB32Texture2D;
 	D3D11_TEXTURE2D_DESC desc = CreateTex2DDesc(DXGI_FORMAT_B8G8R8A8_UNORM, m_srcWidth, m_srcHeight, Tex2D_DefaultShaderRTarget);
@@ -2962,8 +2938,8 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
 		return hr;
 	}
 
-	RECT imageRect = {0,0,m_srcWidth,m_srcHeight};
-	
+	RECT imageRect = {0, 0, m_srcWidth, m_srcHeight};
+
 	const auto backupHdrPassthrough = m_bHdrPassthrough;
 	const auto backupHdrLocalToneMapping = m_bHdrLocalToneMapping;
 	const bool bisHDROutput = (m_bHdrSupport && (backupHdrPassthrough || backupHdrLocalToneMapping) && SourceIsHDR());
@@ -2979,12 +2955,12 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
 		{
 			m_pPSCorrection_HDR.Release();
 			m_pCorrectionConstants_HDR.Release();
-			auto resId = m_srcExFmt_HDRParams.VideoTransferFunction == MFVideoTransFunc_2084 ? IDF_PS_11_CONVERT_PQ_TO_SDR : IDF_PS_11_FIXCONVERT_HLG_TO_SDR;
+			auto resId = m_srcExFmt.HDRParams.VideoTransferFunction == MFVideoTransFunc_2084 ? IDF_PS_11_CONVERT_PQ_TO_SDR : IDF_PS_11_FIXCONVERT_HLG_TO_SDR;
 			HRESULT hrCreate = CreatePShaderFromResource(&m_pPSCorrection_HDR, resId);
 			DLogIf(FAILED(hrCreate), L"GetCurrentImage() : CreatePShaderFromResource for temporary SDR correction failed with error {}", HR2Str(hrCreate));
 			ShaderLuminanceParams_t lumParams = {};
 			SetShaderLuminanceParams(lumParams);
-			
+
 			m_pPSHDR10ToneMapping_HDR.Release();
 			m_pHDR10ToneMappingConstants_HDR.Release();
 			if (backupHdrLocalToneMapping)
@@ -3018,12 +2994,12 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
 	CopyRect(&m_windowRect, &imageRect);
 	UpdateTexures();
 	UpdatePostScaleTexures();
-	
+
 	auto pSub11CallBack = m_pFilter->m_pSub11CallBack;
-	m_pFilter->m_pSub11CallBack = nullptr; 
+	m_pFilter->m_pSub11CallBack = nullptr;
 	hr = Process(pRGB32Texture2D, m_srcRect, imageRect, false);
 	m_pFilter->m_pSub11CallBack = pSub11CallBack;
-	
+
 	m_videoRect = backupVidRect;
 	m_windowRect = backupWndRect;
 	UpdateTexures();
@@ -3037,7 +3013,7 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
 			m_pCorrectionConstants_HDR = pOrigCorrectionConstants;
 			m_pPSHDR10ToneMapping_HDR = pOrigPSHDR10ToneMapping;
 			m_pHDR10ToneMappingConstants_HDR = pOrigHDR10ToneMappingConstants;
-			
+
 			if (backupHdrLocalToneMapping)
 			{
 				SetHDR10ShaderParams(
@@ -3062,7 +3038,6 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(ID3D11Texture2D** ppImg)
 
 	return hr;
 }
-
 HRESULT CDX11VideoProcessor::GetDisplayedImage(BYTE **ppDib, unsigned *pSize)
 {
 	if (!m_pDXGISwapChain1 || !m_pDevice || !m_pDeviceContext)
@@ -3192,40 +3167,74 @@ HRESULT CDX11VideoProcessor::GetVPInfo(std::wstring &str)
 	if (m_pDevice)
 	{
 		std::vector<std::pair<const DXGI_FORMAT, UINT>> formatsYUV = {
-			{DXGI_FORMAT_NV12, 0}, {DXGI_FORMAT_P010, 0}, {DXGI_FORMAT_P016, 0}, {DXGI_FORMAT_YUY2, 0},
-			{DXGI_FORMAT_Y210, 0}, {DXGI_FORMAT_Y216, 0}, {DXGI_FORMAT_AYUV, 0}, {DXGI_FORMAT_Y410, 0},
+			{DXGI_FORMAT_NV12, 0},
+			{DXGI_FORMAT_P010, 0},
+			{DXGI_FORMAT_P016, 0},
+			{DXGI_FORMAT_YUY2, 0},
+			{DXGI_FORMAT_Y210, 0},
+			{DXGI_FORMAT_Y216, 0},
+			{DXGI_FORMAT_AYUV, 0},
+			{DXGI_FORMAT_Y410, 0},
 			{DXGI_FORMAT_Y416, 0},
 		};
 		std::vector<std::pair<const DXGI_FORMAT, UINT>> formatsRGB = {
-			{DXGI_FORMAT_B8G8R8X8_UNORM, 0}, {DXGI_FORMAT_B8G8R8A8_UNORM, 0},
-			{DXGI_FORMAT_R10G10B10A2_UNORM, 0}, {DXGI_FORMAT_R16G16B16A16_UNORM, 0},
+			{DXGI_FORMAT_B8G8R8X8_UNORM, 0},
+			{DXGI_FORMAT_B8G8R8A8_UNORM, 0},
+			{DXGI_FORMAT_R10G10B10A2_UNORM, 0},
+			{DXGI_FORMAT_R16G16B16A16_UNORM, 0},
 		};
-		for (auto &[format, formatSupport] : formatsYUV) { m_pDevice->CheckFormatSupport(format, &formatSupport); }
-		for (auto &[format, formatSupport] : formatsRGB) { m_pDevice->CheckFormatSupport(format, &formatSupport); }
+		for (auto &[format, formatSupport] : formatsYUV)
+		{
+			m_pDevice->CheckFormatSupport(format, &formatSupport);
+		}
+		for (auto &[format, formatSupport] : formatsRGB)
+		{
+			m_pDevice->CheckFormatSupport(format, &formatSupport);
+		}
 		int count = 0;
 		str += L"\nD3D11 VP input formats  :";
-		for (const auto &[format, formatSupport] : formatsYUV) {
-			if (formatSupport & D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT) {
-				str.append(L" "); str.append(DXGIFormatToString(format)); count++;
+		for (const auto &[format, formatSupport] : formatsYUV)
+		{
+			if (formatSupport & D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT)
+			{
+				str.append(L" ");
+				str.append(DXGIFormatToString(format));
+				count++;
 			}
 		}
-		if (count) { str += L"\n "; }
-		for (const auto &[format, formatSupport] : formatsRGB) {
-			if (formatSupport & D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT) {
-				str.append(L" "); str.append(DXGIFormatToString(format));
+		if (count)
+		{
+			str += L"\n ";
+		}
+		for (const auto &[format, formatSupport] : formatsRGB)
+		{
+			if (formatSupport & D3D11_FORMAT_SUPPORT_VIDEO_PROCESSOR_INPUT)
+			{
+				str.append(L" ");
+				str.append(DXGIFormatToString(format));
 			}
 		}
 		count = 0;
 		str += L"\nShader Texture2D formats:";
-		for (const auto &[format, formatSupport] : formatsYUV) {
-			if (formatSupport & (D3D11_FORMAT_SUPPORT_TEXTURE2D | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE)) {
-				str.append(L" "); str.append(DXGIFormatToString(format)); count++;
+		for (const auto &[format, formatSupport] : formatsYUV)
+		{
+			if (formatSupport & (D3D11_FORMAT_SUPPORT_TEXTURE2D | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE))
+			{
+				str.append(L" ");
+				str.append(DXGIFormatToString(format));
+				count++;
 			}
 		}
-		if (count) { str += L"\n "; }
-		for (const auto &[format, formatSupport] : formatsRGB) {
-			if (formatSupport & (D3D11_FORMAT_SUPPORT_TEXTURE2D | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE)) {
-				str.append(L" "); str.append(DXGIFormatToString(format));
+		if (count)
+		{
+			str += L"\n ";
+		}
+		for (const auto &[format, formatSupport] : formatsRGB)
+		{
+			if (formatSupport & (D3D11_FORMAT_SUPPORT_TEXTURE2D | D3D11_FORMAT_SUPPORT_SHADER_SAMPLE))
+			{
+				str.append(L" ");
+				str.append(DXGIFormatToString(format));
 			}
 		}
 	}
@@ -3319,7 +3328,7 @@ void CDX11VideoProcessor::Configure(const Settings_t &config)
 	}
 	if (config.bHdrPreferDoVi != m_bHdrPreferDoVi)
 	{
-		if (m_Dovi.bValid && !config.bHdrPreferDoVi && SourceIsPQorHLG(m_srcExFmt_HDRParams))
+		if (m_Dovi.bValid && !config.bHdrPreferDoVi && SourceIsPQorHLG(m_srcExFmt.HDRParams))
 		{
 			m_Dovi = {};
 			changeVP = true;
@@ -3417,8 +3426,8 @@ void CDX11VideoProcessor::Configure(const Settings_t &config)
 	if (changeWindow)
 	{
 		ReleaseSwapChain();
-		EXECUTE_ASSERT(S_OK == m_pFilter->Init(true)); 
-		if (changeHDR && (SourceIsPQorHLG(m_srcExFmt_HDRParams) || m_bVPUseRTXVideoHDR || m_bVPRTXVideoHDR) || m_iHdrToggleDisplay)
+		EXECUTE_ASSERT(S_OK == m_pFilter->Init(true));
+		if (changeHDR && (SourceIsPQorHLG(m_srcExFmt.HDRParams) || m_bVPUseRTXVideoHDR || m_bVPRTXVideoHDR) || m_iHdrToggleDisplay)
 		{
 			m_srcVideoTransferFunction = 0;
 			InitMediaType(&m_pFilter->m_inputMT);
@@ -3629,10 +3638,18 @@ void CDX11VideoProcessor::UpdateStatsPresent()
 		}
 		switch (swapchain_desc.SwapEffect)
 		{
-		case DXGI_SWAP_EFFECT_DISCARD: m_strStatsPresent.append(L"Discard"); break;
-		case DXGI_SWAP_EFFECT_SEQUENTIAL: m_strStatsPresent.append(L"Sequential"); break;
-		case DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL: m_strStatsPresent.append(L"Flip sequential"); break;
-		case DXGI_SWAP_EFFECT_FLIP_DISCARD: m_strStatsPresent.append(L"Flip discard"); break;
+		case DXGI_SWAP_EFFECT_DISCARD:
+			m_strStatsPresent.append(L"Discard");
+			break;
+		case DXGI_SWAP_EFFECT_SEQUENTIAL:
+			m_strStatsPresent.append(L"Sequential");
+			break;
+		case DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL:
+			m_strStatsPresent.append(L"Flip sequential");
+			break;
+		case DXGI_SWAP_EFFECT_FLIP_DISCARD:
+			m_strStatsPresent.append(L"Flip discard");
+			break;
 		}
 		m_strStatsPresent.append(L", ");
 		m_strStatsPresent.append(DXGIFormatToString(swapchain_desc.Format));
@@ -3657,9 +3674,15 @@ void CDX11VideoProcessor::UpdateStatsStatic()
 				m_strStatsVProc.append(L", Chroma scaling: ");
 				switch (m_iChromaScaling)
 				{
-				case CHROMA_Nearest: m_strStatsVProc.append(L"Nearest-neighbor"); break;
-				case CHROMA_Bilinear: m_strStatsVProc.append(L"Bilinear"); break;
-				case CHROMA_CatmullRom: m_strStatsVProc.append(L"Catmull-Rom"); break;
+				case CHROMA_Nearest:
+					m_strStatsVProc.append(L"Nearest-neighbor");
+					break;
+				case CHROMA_Bilinear:
+					m_strStatsVProc.append(L"Bilinear");
+					break;
+				case CHROMA_CatmullRom:
+					m_strStatsVProc.append(L"Catmull-Rom");
+					break;
 				}
 			}
 		}
@@ -3678,10 +3701,18 @@ void CDX11VideoProcessor::UpdateStatsStatic()
 					m_strStatsHDR.append(L"Local tone mapping:");
 					switch (m_iHdrLocalToneMappingType)
 					{
-					case 1: m_strStatsHDR.append(L" ACES"); break;
-					case 2: m_strStatsHDR.append(L" Reinhard"); break;
-					case 3: m_strStatsHDR.append(L" Habel"); break;
-					case 4: m_strStatsHDR.append(L" Mobius"); break;
+					case 1:
+						m_strStatsHDR.append(L" ACES");
+						break;
+					case 2:
+						m_strStatsHDR.append(L" Reinhard");
+						break;
+					case 3:
+						m_strStatsHDR.append(L" Habel");
+						break;
+					case 4:
+						m_strStatsHDR.append(L" Mobius");
+						break;
 					}
 					m_strStatsHDR.append(std::format(L"\n Display Max Nits: {:.1f} nits", m_fHdrDisplayMaxNits));
 				}
@@ -3966,7 +3997,7 @@ CDX11VideoProcessor::~CDX11VideoProcessor()
 {
 	ReleaseDevice();
 	ReleaseSwapChain();
-	
+
 	if (pOrigSetWindowPosDX11)
 	{
 		if (MH_DisableHook(pOrigSetWindowPosDX11) == MH_OK)
@@ -3983,6 +4014,5 @@ CDX11VideoProcessor::~CDX11VideoProcessor()
 		}
 		pOrigSetWindowLongADX11 = nullptr;
 	}
-	// Note: MH_Uninitialize() is typically called once at global application shutdown,
-	// not usually in a class destructor unless this class manages the entire hook lifecycle.
+	// Note: MH_Uninitialize() is typically called once at global application shutdown.
 }

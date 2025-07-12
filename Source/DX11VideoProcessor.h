@@ -20,14 +20,12 @@
 
 #pragma once
 
-#include <DXGI1_2.h>
+// --- FIX: Include all dependencies first to make the header self-contained ---
+#include <DXGI1_5.h>
 #include <dxva2api.h>
-#include <dxgi1_5.h>
 #include <strmif.h>
 #include <map>
 #include <vector>
-
-// Important: Include dependent headers first to ensure all types are defined before use.
 #include "Shaders.h"
 #include "DX11Helper.h"
 #include "D3D11VP.h"
@@ -218,7 +216,7 @@ private:
 	} m_PSConvColorData;
 	
 	// --- State and Configuration Members ---
-	ExFormat_t                    m_srcExFmt = {};
+	ExFormat_t                    m_srcExFmt; // Initialized in constructor
 	DXGI_SWAP_EFFECT              m_UsedSwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	DXGI_COLOR_SPACE_TYPE         m_currentSwapChainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
 	DXGI_FORMAT                   m_srcDXGIFormat = DXGI_FORMAT_UNKNOWN;
@@ -272,7 +270,7 @@ private:
 	CD3D11Rectangle               m_Underlay;
 	CD3D11Lines                   m_Lines;
 	CD3D11Lines                   m_SyncLine;
-	CD3D11Rectangle               d3d11rect; // Used in Render() for tearing test
+	CD3D11Rectangle               d3d11rect;
 	D3DCOLOR                      m_dwStatsTextColor = D3DCOLOR_XRGB(255, 255, 255);
 	HMONITOR                      m_lastFullscreenHMonitor = nullptr;
 };
