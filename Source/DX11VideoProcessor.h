@@ -43,7 +43,6 @@ class CDX11VideoProcessor
 private:
 	friend class CVideoRendererInputPin;
 
-	// Direct3D 11
 	CComPtr<ID3D11Device1>        m_pDevice;
 	CComPtr<ID3D11DeviceContext1> m_pDeviceContext;
 	CComPtr<ID3D11SamplerState>   m_pSamplerPoint;
@@ -65,33 +64,28 @@ private:
 	CComPtr<ID3D11PixelShader>    m_pPS_TEST;
 #endif
 
-	Tex11Video_t m_TexSrcVideo; // for copy of frame
+	Tex11Video_t m_TexSrcVideo;
 	Tex2D_t m_TexConvertOutput;
-	Tex2D_t m_TexResize;        // for intermediate result of two-pass resize
+	Tex2D_t m_TexResize;
 	CTex2DRing m_TexsPostScale;
 	Tex2D_t m_TexDither;
 
-	// for GetAlignmentSize()
 	struct Alignment_t {
 		Tex11Video_t texture;
 		ColorFormat_t cformat = {};
 		LONG cx = {};
 	} m_Alignment;
 
-	// D3D11 Video Processor
 	CD3D11VP m_D3D11VP;
 
-	// Output Format convertion
 	CComPtr<ID3D11Buffer> m_pCorrectionConstants;
 	CComPtr<ID3D11PixelShader> m_pPSCorrection;
 	const wchar_t* m_strCorrection = nullptr;
 
-	// HDR tonemapping
 	CComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants;
 	CComPtr<ID3D11PixelShader> m_pPSHDR10ToneMapping;
 	const wchar_t* m_strHDR10ToneMapping = nullptr;
 
-	// D3D11 Shader Video Processor
 	CComPtr<ID3D11PixelShader> m_pPSConvertColor;
 	CComPtr<ID3D11PixelShader> m_pPSConvertColorDeint;
 	struct {
@@ -124,16 +118,9 @@ private:
 	CComPtr<IDXGIOutput>    m_pDXGIOutput;
 	DXGI_COLOR_SPACE_TYPE m_currentSwapChainColorSpace = DXGI_COLOR_SPACE_RGB_FULL_G22_NONE_P709;
 
-	// Input parameters
 	DXGI_FORMAT m_srcDXGIFormat = DXGI_FORMAT_UNKNOWN;
-
-	// D3D11 VP texture format
 	DXGI_FORMAT m_D3D11OutputFmt = DXGI_FORMAT_UNKNOWN;
-
-	// intermediate texture format
 	DXGI_FORMAT m_InternalTexFmt = DXGI_FORMAT_B8G8R8A8_UNORM;
-
-	// swap chain format
 	DXGI_FORMAT m_SwapChainFmt = DXGI_FORMAT_B8G8R8A8_UNORM;
 	UINT32 m_DisplayBitsPerChannel = 8;
 
@@ -143,11 +130,9 @@ private:
 
 	bool m_bSubPicWasRendered = false;
 
-	// AlphaBitmap
 	Tex2D_t m_TexAlphaBitmap;
 	CComPtr<ID3D11Buffer> m_pAlphaBitmapVertex;
 
-	// Statistics
 	CD3D11Rectangle m_StatsBackground;
 	CD3D11Font      m_Font3D;
 	CD3D11Rectangle m_Rect3D;
@@ -158,23 +143,22 @@ private:
 	bool m_bIsFullscreen = false;
 
 	int m_iVPSuperRes = SUPERRES_Disable;
-	bool m_bVPUseSuperRes = false; // but it is not exactly
+	bool m_bVPUseSuperRes = false;
 
 	bool m_bVPRTXVideoHDR = false;
 	bool m_bVPUseRTXVideoHDR = false;
 
 	bool m_bHdrSupport = false;
-	bool m_bHdrDisplaySwitching   = false; // switching HDR display in progress
+	bool m_bHdrDisplaySwitching   = false;
 	bool m_bHdrDisplayModeEnabled = false;
 	bool m_bHdrAllowSwitchDisplay = true;
 	bool m_bACMEnabled            = false;
 
-	UINT m_srcVideoTransferFunction = 0; 
+	UINT m_srcVideoTransferFunction = 0;
 
 	std::map<std::wstring, bool> m_hdrModeSavedState;
 	std::map<std::wstring, bool, std::less<>> m_hdrModeStartState;
 	
-	// FIX: Add member variables to track current slider values
 	float m_fHdrDynamicRangeCompression;
 	float m_fHdrShadowDetail;
 	float m_fHdrColorVolumeAdaptation;
@@ -192,10 +176,8 @@ private:
 	UINT m_DoviMinMasteringLuminance = 0;
 
 	HMONITOR m_lastFullscreenHMonitor = nullptr;
-
 	D3DCOLOR m_dwStatsTextColor = D3DCOLOR_XRGB(255, 255, 255);
 
-	// SubPic
 	CComPtr<CDX11SubPicAllocator> m_pSubPicAllocator;
 	bool m_bCallbackDeviceIsSet = false;
 	void SetCallbackDevice();
@@ -220,7 +202,8 @@ private:
 	HRESULT CreatePShaderFromResource(ID3D11PixelShader** ppPixelShader, UINT resid);
 	void SetShaderConvertColorParams();
 	void SetShaderLuminanceParams();
-	void SetHDR10ShaderParams(float, float, float, float, float, int);
+	// FIX: This is now the one and only declaration for this function
+	void SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits, float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType, float dynamicRangeCompression, float shadowDetail, float colorVolumeAdaptation, float sceneAdaptation);
 
 	HRESULT SetShaderDoviCurvesPoly();
 	HRESULT SetShaderDoviCurves();
@@ -248,13 +231,12 @@ public:
 
 	HRESULT InitializeD3D11VP(const FmtConvParams_t& params, const UINT width, const UINT height, const CMediaType* pmt);
 	HRESULT InitializeTexVP(const FmtConvParams_t& params, const UINT width, const UINT height);
-	void UpdatFrameProperties(); // use this after receiving modified frame from hardware decoder
+	void UpdatFrameProperties();
 
 	BOOL GetAlignmentSize(const CMediaType& mt, SIZE& Size) override;
 
 	HRESULT ProcessSample(IMediaSample* pSample) override;
 	HRESULT CopySample(IMediaSample* pSample);
-	// Render: 1 - render first fied or progressive frame, 2 - render second fied, 0 or other - forced repeat of render.
 	HRESULT Render(int field, const REFERENCE_TIME frameStartTime) override;
 	HRESULT FillBlack() override;
 
@@ -267,7 +249,6 @@ public:
 	HRESULT GetDisplayedImage(BYTE **ppDib, unsigned* pSize) override;
 	HRESULT GetVPInfo(std::wstring& str) override;
 
-	// Settings
 	void Configure(const Settings_t& config) override;
 
 	void SetRotation(int value) override;
@@ -314,14 +295,11 @@ private:
 
 	void UpdateStatsPresent();
 	void UpdateStatsStatic();
-	//void UpdateStatsPostProc();
 	HRESULT DrawStats(ID3D11Texture2D* pRenderTarget);
 
 public:
-	// IMFVideoProcessor
 	STDMETHODIMP SetProcAmpValues(DWORD dwFlags, DXVA2_ProcAmpValues *pValues) override;
 
-	// IMFVideoMixerBitmap
 	STDMETHODIMP SetAlphaBitmap(const MFVideoAlphaBitmap *pBmpParms) override;
 	STDMETHODIMP UpdateAlphaBitmapParameters(const MFVideoAlphaBitmapParams *pBmpParms) override;
 };
