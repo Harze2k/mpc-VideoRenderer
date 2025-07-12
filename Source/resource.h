@@ -85,11 +85,16 @@
 #define IDF_PS_11_HALFOU_TO_INTERLACE   870
 #define IDF_PS_11_FINAL_PASS            880
 #define IDF_PS_11_FINAL_PASS_10         881
+#define IDF_PS_11_FIX_HDR10             882
 #define IDF_PS_11_TEST                  900
+
+// Control IDs
 #define IDC_EDIT1                       1001
 #define IDC_EDIT2                       1002
 #define IDC_EDIT3                       1003
 #define IDC_EDIT_DISPLAYMAX             1003
+
+// Static labels
 #define IDC_STATIC1                     1011
 #define IDC_STATIC2                     1012
 #define IDC_STATIC3                     1013
@@ -98,6 +103,8 @@
 #define IDC_STATIC6                     1016
 #define IDC_STATIC7                     1017
 #define IDC_STATIC8                     1018
+
+// Checkboxes
 #define IDC_CHECK1                      1021
 #define IDC_CHECK2                      1022
 #define IDC_CHECK3                      1023
@@ -117,6 +124,8 @@
 #define IDC_CHECK17                     1037
 #define IDC_CHECK18                     1038
 #define IDC_CHECK19                     1039
+
+// Combo boxes
 #define IDC_COMBO1                      1041
 #define IDC_COMBO2                      1042
 #define IDC_COMBO3                      1043
@@ -125,12 +134,21 @@
 #define IDC_COMBO6                      1046
 #define IDC_COMBO7                      1047
 #define IDC_COMBO8                      1048
+#define IDC_COMBO9                      1066
+
+// Buttons
 #define IDC_BUTTON1                     1051
+
+// Sliders
 #define IDC_SLIDER1                     1061
 #define IDC_SLIDER2                     1062
-#define IDC_COMBO9                      1066
+#define IDC_SLIDER3                     1098
+#define IDC_SLIDER4                     1099
+#define IDC_SLIDER5                     1100
+#define IDC_SLIDER6                     1101
+
+// HDR Enhancement static labels
 #define IDC_STATIC99                    1067
-#define IDF_PS_11_FIX_HDR10             1068
 #define IDC_STATIC100                   1088
 #define IDC_STATIC101                   1090
 #define IDC_STATIC102                   1091  
@@ -140,14 +158,13 @@
 #define IDC_STATIC106                   1095
 #define IDC_STATIC107                   1096
 #define IDC_STATIC108                   1097
-#define IDC_SLIDER3                     1098
-#define IDC_SLIDER4                     1099
-#define IDC_SLIDER5                     1100
-#define IDC_SLIDER6                     1101
+
+// HDR Enhancement edit controls
 #define IDC_EDIT_DRC                    1102
 #define IDC_EDIT_SHADOW                 1103
 #define IDC_EDIT_COLORVOL               1104
 #define IDC_EDIT_SCENE                  1105
+
 // Tooltip string IDs
 #define IDS_TT_USE_D3D11                1200
 #define IDS_TT_TEXTURE_FORMAT           1201
@@ -173,7 +190,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE        106
 #define _APS_NEXT_COMMAND_VALUE         40001
-#define *APS*NEXT_CONTROL_VALUE         1106
+#define _APS_NEXT_CONTROL_VALUE         1106
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
 #endif

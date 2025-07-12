@@ -9,6 +9,7 @@ struct PS_INPUT
     float2 Tex : TEXCOORD;
 };
 
+// ✅ Enhanced HDR Parameters - Aligned with PropPage.cpp UI controls
 cbuffer RootConstants : register(b0)
 {
     float MasteringMinLuminanceNits;
@@ -18,11 +19,11 @@ cbuffer RootConstants : register(b0)
     float displayMaxNits;
     uint selection;
     
-    // Enhanced HDR parameters from UI sliders
-    float dynamicRangeCompression;
-    float shadowDetail;
-    float colorVolumeAdaptation;
-    float sceneAdaptation;
+    // Enhanced HDR parameters from UI sliders (matches PropPage.cpp exactly)
+    float dynamicRangeCompression;    // fHdrDynamicRangeCompression (0.0-1.0)
+    float shadowDetail;               // fHdrShadowDetail (0.0-2.0)
+    float colorVolumeAdaptation;      // fHdrColorVolumeAdaptation (0.0-1.0)
+    float sceneAdaptation;            // fHdrSceneAdaptation (0.0-1.0)
 };
 
 // Rec.2020 color primaries and white point (for Dolby Vision)
@@ -57,14 +58,16 @@ static const float3 ACES_LUMA = float3(0.2722287, 0.6740818, 0.0536895);
 
 // ✅ Enhanced ACES for Dolby Vision with Dynamic Adaptation
 float3 EnhancedACESForDolbyVision(float3 color) {
-	if (dynamicRangeCompression <= 0.0 && shadowDetail <= 0.0 && 
-			colorVolumeAdaptation <= 0.0 && sceneAdaptation <= 0.0) {
-			// Use basic ACES formula as fallback
-			return saturate((color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f));
-		}
+    // Safety check - use basic ACES as fallback if no enhancements
+    if (dynamicRangeCompression <= 0.0 && shadowDetail <= 0.0 && 
+        colorVolumeAdaptation <= 0.0 && sceneAdaptation <= 0.0) {
+        // Basic ACES formula
+        return saturate((color * (2.51f * color + 0.03f)) / (color * (2.43f * color + 0.59f) + 0.14f));
+    }
+    
     // Step 1: Calculate scene-relative luminance for adaptation
     float sceneLuma = dot(color, REC2020_LUMA);
-    float normalizedLuma = sceneLuma / MasteringMaxLuminanceNits;
+    float normalizedLuma = sceneLuma / max(MasteringMaxLuminanceNits, 1.0);
     
     // Step 2: Dynamic range compression based on scene brightness
     float compressionFactor = lerp(1.0, 0.7, dynamicRangeCompression * normalizedLuma);
@@ -86,8 +89,9 @@ float3 EnhancedACESForDolbyVision(float3 color) {
     // Adjust 'a' parameter for better highlight handling in bright scenes
     a = lerp(2.51f, 2.20f, contentAdaptation);
     
-    // Adjust 'e' parameter for better shadow detail
-    e = lerp(0.14f, 0.12f, shadowDetail * 0.5);
+    // Adjust 'e' parameter for better shadow detail (UI slider range 0.0-2.0)
+    float shadowFactor = saturate(shadowDetail / 2.0); // Normalize to 0-1
+    e = lerp(0.14f, 0.12f, shadowFactor * 0.5);
     
     // Apply modified ACES tone curve
     float3 toneMapped = (acesColor * (a * acesColor + b)) / (acesColor * (c * acesColor + d) + e);
@@ -109,15 +113,16 @@ float3 EnhancedACESForDolbyVision(float3 color) {
     return saturate(toneMapped);
 }
 
-// ✅ Dolby Vision Specific Shadow Enhancement
+// ✅ Dolby Vision Specific Shadow Enhancement (Enhanced for UI slider range 0.0-2.0)
 float3 EnhanceShadows(float3 color, float enhancement) {
     if (enhancement <= 0.0) return color;
     
     float luma = dot(color, REC2020_LUMA);
     
     // Shadow enhancement curve (affects mainly dark areas)
+    // Scale enhancement from 0-2 range to appropriate boost
     float shadowMask = 1.0 - smoothstep(0.0, 0.3, luma);
-    float shadowBoost = 1.0 + (enhancement * shadowMask * 0.5);
+    float shadowBoost = 1.0 + (enhancement * shadowMask * 0.25); // Scale down for UI range
     
     // Apply enhancement while preserving color ratios
     if (luma > 1e-6) {
@@ -160,6 +165,9 @@ float3 OptimizedPQHandling(float3 linearColor) {
 
 // ✅ Advanced Color Preservation for Wide Gamut Content
 float3 PreserveColorVolume(float3 originalColor, float3 toneMappedColor) {
+    // Only apply if color volume adaptation is enabled
+    if (colorVolumeAdaptation <= 0.0) return toneMappedColor;
+    
     float3 originalXYZ = mul(REC2020_TO_XYZ, originalColor);
     float3 toneMappedXYZ = mul(REC2020_TO_XYZ, toneMappedColor);
     
@@ -175,28 +183,53 @@ float3 PreserveColorVolume(float3 originalColor, float3 toneMappedColor) {
         float saturation = length(originalColor - dot(originalColor, REC2020_LUMA));
         float blendFactor = saturate(saturation * 2.0);
         
-        return lerp(toneMappedColor, preservedRec2020, blendFactor * 0.7);
+        // Use colorVolumeAdaptation as blend strength
+        float adaptationStrength = colorVolumeAdaptation * 0.7;
+        return lerp(toneMappedColor, preservedRec2020, blendFactor * adaptationStrength);
     }
     
     return toneMappedColor;
 }
 
-// ✅ Reinhard Tone Mapping (kept as fallback)
+// ✅ Enhanced Reinhard with UI Parameter Integration
 float3 ReinhardTonemap(float3 color) {
     float luma = dot(color, REC2020_LUMA);
+    
+    // Apply dynamic range compression
+    float compressionFactor = lerp(1.0, 0.8, dynamicRangeCompression);
+    luma *= compressionFactor;
+    
     float toneMappedLuma = luma / (1.0 + luma);
+    
+    // Apply shadow detail enhancement
+    if (shadowDetail > 0.0) {
+        float shadowBoost = 1.0 + (shadowDetail * 0.1 * (1.0 - toneMappedLuma));
+        toneMappedLuma *= shadowBoost;
+    }
+    
     return color * (toneMappedLuma / max(luma, 1e-6));
 }
 
-// ✅ Habel Tone Mapping (kept as fallback)
+// ✅ Enhanced Hable with UI Parameter Integration
 float3 HabelTonemap(float3 color) {
     float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
-    return saturate(((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F);
+    
+    // Adjust parameters based on UI settings
+    if (dynamicRangeCompression > 0.0) {
+        A = lerp(0.15, 0.12, dynamicRangeCompression * 0.5);
+    }
+    
+    if (shadowDetail > 0.0) {
+        E = lerp(0.02, 0.015, shadowDetail * 0.1);
+    }
+    
+    float3 result = ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
+    return saturate(result);
 }
 
-// ✅ Möbius Tone Mapping (kept as fallback)
+// ✅ Enhanced Möbius with UI Parameter Integration
 float3 MobiusTonemap(float3 color) {
-    float transition = displayMaxNits * 0.7;
+    float transition = displayMaxNits * lerp(0.7, 0.5, dynamicRangeCompression * 0.5);
     float peak = displayMaxNits;
     
     float luma = dot(color, REC2020_LUMA);
@@ -206,10 +239,16 @@ float3 MobiusTonemap(float3 color) {
         color *= compressionRatio;
     }
     
+    // Apply shadow enhancement
+    if (shadowDetail > 0.0 && luma < transition * 0.3) {
+        float shadowBoost = 1.0 + (shadowDetail * 0.15 * (1.0 - luma / (transition * 0.3)));
+        color *= shadowBoost;
+    }
+    
     return color;
 }
 
-// ✅ Main Shader Entry Point - Optimized for Dolby Vision
+// ✅ Main Shader Entry Point - Optimized for Dolby Vision with UI Integration
 float4 main(PS_INPUT input) : SV_Target {
     // Sample texture and convert from PQ to linear
     float4 color = tex.Sample(samp, input.Tex);
@@ -223,11 +262,13 @@ float4 main(PS_INPUT input) : SV_Target {
     float contentLightLevel = maxCLL > 0.0 ? maxCLL : MasteringMaxLuminanceNits;
     float frameAverageLevel = maxFALL > 0.0 ? maxFALL : MasteringMaxLuminanceNits * 0.1;
     
-    // Dynamic adaptation based on content light levels
+    // Dynamic adaptation based on content light levels and scene adaptation parameter
     float adaptationFactor = 1.0;
     if (frameAverageLevel > 0.0 && frameAverageLevel < MasteringMaxLuminanceNits) {
         float fallRatio = frameAverageLevel / MasteringMaxLuminanceNits;
-        adaptationFactor = lerp(0.7, 1.0, fallRatio);
+        // Use sceneAdaptation to control how much we adapt to frame average
+        float adaptationStrength = lerp(0.3, 1.0, sceneAdaptation);
+        adaptationFactor = lerp(0.7, 1.0, fallRatio * adaptationStrength);
     }
     
     // Intelligent display adaptation for different display capabilities
@@ -242,10 +283,10 @@ float4 main(PS_INPUT input) : SV_Target {
     color.rgb *= (adaptationFactor * displayAdaptation) / effectiveMaxLum;
     color.rgb = max(color.rgb, 0.0);
     
-    // Apply shadow enhancement before tone mapping
+    // Apply shadow enhancement before tone mapping (respects UI slider 0.0-2.0 range)
     color.rgb = EnhanceShadows(color.rgb, shadowDetail);
     
-    // Apply selected tone mapping with enhanced ACES as primary
+    // Apply selected tone mapping with enhanced algorithms
     float3 toneMappedColor;
     
     if (selection == 1) {
@@ -264,10 +305,10 @@ float4 main(PS_INPUT input) : SV_Target {
         toneMappedColor = EnhancedACESForDolbyVision(color.rgb); // Default to enhanced ACES
     }
     
-    // Advanced color preservation for wide gamut content
+    // Advanced color preservation for wide gamut content (uses colorVolumeAdaptation)
     toneMappedColor = PreserveColorVolume(color.rgb, toneMappedColor);
     
-    // Dynamic highlight protection
+    // Dynamic highlight protection (uses dynamicRangeCompression)
     toneMappedColor = ProtectHighlights(toneMappedColor, dynamicRangeCompression);
     
     // Scale to display capabilities
