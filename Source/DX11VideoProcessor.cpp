@@ -2839,7 +2839,9 @@ void CDX11VideoProcessor::DrawSubtitles()
 		}
 	}
 }
-HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D *pRenderTarget, const CRect &srcRect, const CRect &dstRect, const bool second)
+HRESULT CDX11VideoProcessor::Process(
+{
+    RECT dstRect = m_videoRect;ID3D11Texture2D *pRenderTarget, const CRect &srcRect, const CRect &dstRect, const bool second)
 {
 	HRESULT hr = S_OK;
 	m_bDitherUsed = false;
@@ -3094,8 +3096,8 @@ HRESULT CDX11VideoProcessor::GetCurrentImage(long *pDIBImage)
 	}
 	const auto backupVidRect = m_videoRect;
 	const auto backupWndRect = m_windowRect;
-	m_videoRect = imageRect;
-	m_windowRect = imageRect;
+	CopyRect(&m_videoRect, &imageRect);
+	CopyRect(&m_windowRect, &imageRect);
 	UpdateTexures();
 	UpdatePostScaleTexures();
 	auto pSub11CallBack = m_pFilter->m_pSub11CallBack;
@@ -4117,3 +4119,4 @@ CDX11VideoProcessor::~CDX11VideoProcessor()
 	// Otherwise, MH_Uninitialize() should be handled at the application's global shutdown.
 	// MH_Uninitialize(); // Uncomment if this object manages MinHook's global lifecycle
 }
+

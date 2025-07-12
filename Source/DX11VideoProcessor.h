@@ -40,6 +40,35 @@ class CVideoRendererInputPin;
 class CDX11VideoProcessor
 	: public CVideoProcessor
 {
+    // --- HDR Enhancement Members ---
+    bool m_bHdrPassthroughSupport;  // If the driver/display supports HDR passthrough
+    bool m_bHdrPassthrough;         // Enable HDR passthrough mode
+    bool m_bHdrLocalToneMapping;    // Enable local tone mapping for HDR content on SDR displays
+    bool m_bHdrSupport;             // If the display is in HDR mode
+    float m_fHdrDisplayMaxNits;
+    int m_iHdrLocalToneMappingType;
+    float m_fHdrDynamicRangeCompression;
+    float m_fHdrShadowDetail;
+    float m_fHdrColorVolumeAdaptation;
+    float m_fHdrSceneAdaptation;
+    ShaderParamsHDR10 m_lastHdr10;
+    
+    CComPtr<ID3D11PixelShader> m_pPSCorrection;
+    CComPtr<ID3D11Buffer> m_pCorrectionConstants;
+    CComPtr<ID3D11PixelShader> m_pPSHDR10ToneMapping;
+    CComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants;
+    
+    D3D11_VIDEO_PROCESSOR_STREAM m_D3D11VP;
+    ExFormat_t m_srcExFmt;
+
+private:
+    // --- Helper Function Declarations ---
+    HRESULT UpdateConvertColorShader();
+    void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
+    void SetHDR10ShaderParams();
+    bool SourceIsHDR() const;
+    HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
+    void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
 private:
 	friend class CVideoRendererInputPin;
 
@@ -192,6 +221,35 @@ public:
 	HRESULT Init(const HWND hwnd, const bool displayHdrChanged, bool* pChangeDevice = nullptr) override;
 	bool Initialized();
 
+    // --- HDR Enhancement Members ---
+    bool m_bHdrPassthroughSupport;  // If the driver/display supports HDR passthrough
+    bool m_bHdrPassthrough;         // Enable HDR passthrough mode
+    bool m_bHdrLocalToneMapping;    // Enable local tone mapping for HDR content on SDR displays
+    bool m_bHdrSupport;             // If the display is in HDR mode
+    float m_fHdrDisplayMaxNits;
+    int m_iHdrLocalToneMappingType;
+    float m_fHdrDynamicRangeCompression;
+    float m_fHdrShadowDetail;
+    float m_fHdrColorVolumeAdaptation;
+    float m_fHdrSceneAdaptation;
+    ShaderParamsHDR10 m_lastHdr10;
+    
+    CComPtr<ID3D11PixelShader> m_pPSCorrection;
+    CComPtr<ID3D11Buffer> m_pCorrectionConstants;
+    CComPtr<ID3D11PixelShader> m_pPSHDR10ToneMapping;
+    CComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants;
+    
+    D3D11_VIDEO_PROCESSOR_STREAM m_D3D11VP;
+    ExFormat_t m_srcExFmt;
+
+private:
+    // --- Helper Function Declarations ---
+    HRESULT UpdateConvertColorShader();
+    void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
+    void SetHDR10ShaderParams();
+    bool SourceIsHDR() const;
+    HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
+    void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
 private:
 	void ReleaseVP();
 	void ReleaseDevice();
@@ -263,6 +321,35 @@ public:
 
 	ISubPicAllocator* GetSubPicAllocator() override;
 
+    // --- HDR Enhancement Members ---
+    bool m_bHdrPassthroughSupport;  // If the driver/display supports HDR passthrough
+    bool m_bHdrPassthrough;         // Enable HDR passthrough mode
+    bool m_bHdrLocalToneMapping;    // Enable local tone mapping for HDR content on SDR displays
+    bool m_bHdrSupport;             // If the display is in HDR mode
+    float m_fHdrDisplayMaxNits;
+    int m_iHdrLocalToneMappingType;
+    float m_fHdrDynamicRangeCompression;
+    float m_fHdrShadowDetail;
+    float m_fHdrColorVolumeAdaptation;
+    float m_fHdrSceneAdaptation;
+    ShaderParamsHDR10 m_lastHdr10;
+    
+    CComPtr<ID3D11PixelShader> m_pPSCorrection;
+    CComPtr<ID3D11Buffer> m_pCorrectionConstants;
+    CComPtr<ID3D11PixelShader> m_pPSHDR10ToneMapping;
+    CComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants;
+    
+    D3D11_VIDEO_PROCESSOR_STREAM m_D3D11VP;
+    ExFormat_t m_srcExFmt;
+
+private:
+    // --- Helper Function Declarations ---
+    HRESULT UpdateConvertColorShader();
+    void SetShaderLuminanceParams(ShaderLuminanceParams_t& params);
+    void SetHDR10ShaderParams();
+    bool SourceIsHDR() const;
+    HRESULT GetCurrentImage(ID3D11Texture2D** ppImg);
+    void StepSetting(ID3D11Texture2D* pTex, const RECT& rect, ID3D11Texture2D* pInputTexture, ID3D11RenderTargetView* pRT);
 private:
 	void UpdateTexures();
 	void UpdatePostScaleTexures();
