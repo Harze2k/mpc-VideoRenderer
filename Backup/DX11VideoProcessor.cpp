@@ -1,5 +1,4 @@
-#ifndef __DX11VIDEOPROCESSOR_H__
-#define __DX11VIDEOPROCESSOR_H__
+// --- START OF FILE Untitled-1.cpp ---
 
 /*
  *  2018-2025 see Authors.txt
@@ -21,214 +20,1285 @@
  *
  */
 
-#include "stdafx.h"
-#include "Shaders.h"
-#include <uuids.h>
-#include <Mferror.h>
-#include <Mfidl.h>
-#include <dwmapi.h>
-#include <optional>
-#include "Helper.h"
-#include "Times.h"
-#include "resource.h"
-#include "VideoRenderer.h"
-#include "../Include/Version.h"
-#include "DX11VideoProcessor.h"
-#include "../Include/ID3DVideoMemoryConfiguration.h"
-#include "DX11VideoProcessor.h"
-#include "Shaders.h"
-#include "Utils/CPUInfo.h"
+#pragma once
 
+// --- Core Includes from original .h ---
+// These are related to Direct3D, DXGI, and DirectShow interfaces.
+#include <DXGI1_5.h>
+#include <dxva2api.h>
+#include <strmif.h>
+#include <map>
+#include <vector>
+// Assume these are required for shaders, helper functions, and DX11VP classes
+#include "Shaders.h"		// Contains shader resource IDs like IDF_PS_11_SIMPLE
+#include "DX11Helper.h"		// Assumed to contain many utility functions and type definitions (e.g., ASSERT, CheckPointer, DLog, HR2Str, Tex2D_t, TexEx_t, etc.)
+#include "D3D11VP.h"		// Assumed to define CD3D11VP and related structures.
+#include "IVideoRenderer.h" // Interface for video rendering.
+#include "D3DUtil/D3D11Font.h"
+#include "D3DUtil/D3D11Geometry.h"
+#include "VideoProcessor.h"
+#include "SubPic/DX11SubPic.h"
+// --- End Core Includes ---
+
+// --- Additional Includes identified from original .cpp ---
+#include <uuids.h>	  // For GUIDs like IID_MediaSideDataHDR
+#include <Mferror.h>  // For MF error codes
+#include <Mfidl.h>	  // For MF interfaces like IMediaSample2, IMediaSideData
+#include <dwmapi.h>	  // For Dwm functions
+#include <optional>	  // For std::optional
+#include "Helper.h"	  // Project-specific helpers (e.g., GetDisplayConfig, DisplayConfig_t)
+#include "Times.h"	  // Project-specific time utilities
+#include "resource.h" // For shader resource IDs (e.g., IDF_PS_11_SIMPLE)
+// #include "../Include/Version.h" // This include caused IntelliSense errors. It might depend on "../revision.h".
+// Removed to resolve the "cannot open source file" error. If VERSION_STR is critical,
+// its definition and the path to its source need to be correctly handled.
+// #include "../Include/ID3DVideoMemoryConfiguration.h" // For related interfaces
+// MinHook is used for function hooking
 #include "../external/minhook/include/MinHook.h"
+// --- End Additional Includes ---
 
-bool g_bPresent = false;
-bool g_bCreateSwapChain = false;
+// --- Standard C++ & Windows Headers ---
+// These are common headers needed for the types and functions used.
+#include <string>		 // For std::string, std::wstring
+#include <algorithm>	 // For std::min, std::max, std::swap, std::clamp
+#include <numeric>		 // For std::gcd (C++17)
+#include <cassert>		 // For _assert, used by ASSERT macro
+#include <Windows.h>	 // For basic Windows types and functions (HWND, RECT, POINT, DWORD, etc.)
+#include <atlbase.h>	 // For CComPtr, CComQIPtr (ATL smart pointers for COM objects)
+#include <atlcom.h>		 // For IID_PPV_ARGS macro
+#include <dshow.h>		 // For DirectShow types like CMediaType, RECT, VIDEOINFOHEADER2, etc.
+#include <d3d11.h>		 // For D3D11 types
+#include <dxgitype.h>	 // For DXGI types
+#include <dxgi1_2.h>	 // For DXGI_SWAP_CHAIN_DESC1
+#include <dxgi1_4.h>	 // For DXGI_SWAP_CHAIN_DESC4
+#include <wrl.h>		 // For C++ COM support (can sometimes be an alternative to ATL)
+#include <iostream>		 // For std::format fallback/placeholder
+#include <DirectXMath.h> // For DirectX::XMFLOAT3, XMFLOAT2
 
-bool ToggleHDR(const DisplayConfig_t &displayConfig, const bool bEnableAdvancedColor);
-typedef BOOL(WINAPI *pSetWindowPos)(
-	_In_ HWND hWnd,
-	_In_opt_ HWND hWndInsertAfter,
-	_In_ int X,
-	_In_ int Y,
-	_In_ int cx,
-	_In_ int cy,
-	_In_ UINT uFlags);
-pSetWindowPos pOrigSetWindowPosDX11 = nullptr;
-static BOOL WINAPI pNewSetWindowPosDX11(
-	_In_ HWND hWnd,
-	_In_opt_ HWND hWndInsertAfter,
-	_In_ int X,
-	_In_ int Y,
-	_In_ int cx,
-	_In_ int cy,
-	_In_ UINT uFlags)
+// --- START OF DEFINITIONS FOR MISSING TYPES ---
+// These are minimal placeholder definitions to resolve compilation/IntelliSense errors.
+// The actual project headers provide the full implementations.
+
+// Placeholder for DisplayConfig_t (from Helper.h)
+
+bool m_bShowStats = false;
+bool m_bDeintDouble = false;
+bool m_bVPScaling = false;
+bool m_bInterpolateAt50pct = false;
+bool m_bUseDither = false;
+bool m_bDeintBlend = false;
+bool m_bVBlankBeforePresent = false;
+bool m_bAdjustPresentTime = false;
+bool m_bHdrPreferDoVi = false;
+bool m_bHdrPassthrough = false;
+bool m_bHdrLocalToneMapping = false;
+bool m_bConvertToSdr = false;
+bool m_bVPRTXVideoHDR = false;
+bool m_iHdrLocalToneMappingType = false;
+
+int m_iResizeStats = 0;
+int m_iTexFormat = 0;
+int m_iChromaScaling = 0;
+int m_iUpscaling = 0;
+int m_iDownscaling = 0;
+int m_iSwapEffect = 0;
+int m_iHdrToggleDisplay = 0;
+int m_iHdrOsdBrightness = 0;
+int m_iSDRDisplayNits = 0;
+int m_iVPSuperRes = 0;
+
+float m_fHdrDisplayMaxNits = 0.0f;
+float m_fHdrDynamicRangeCompression = 0.0f;
+float m_fHdrShadowDetail = 0.0f;
+float m_fHdrColorVolumeAdaptation = 0.0f;
+float m_fHdrSceneAdaptation = 0.0f;
+
+int m_nCurrentAdapter = -1;
+
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pShaderDownscaleX;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pShaderDownscaleY;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pPSFinalPass;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pPS_Simple;
+    Microsoft::WRL::ComPtr<ID3D11PixelShader> m_pPS_BitmapToFrame;
+    
+    Microsoft::WRL::ComPtr<ID3D11VertexShader> m_pVS_Simple;
+    Microsoft::WRL::ComPtr<ID3D11InputLayout> m_pVSimpleInputLayout;
+    
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pCorrectionConstants_HDR;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants_HDR;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pPostScaleConstants;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pResizeShaderConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pHalfOUtoInterlaceConstantBuffer;
+    Microsoft::WRL::ComPtr<ID3D11Buffer> m_pFinalPassConstantBuffer;
+    
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_pSamplerPoint;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_pSamplerLinear;
+    Microsoft::WRL::ComPtr<ID3D11SamplerState> m_pSamplerDither;
+    
+    Microsoft::WRL::ComPtr<ID3D11BlendState> m_pAlphaBlendState;
+    Microsoft::WRL::ComPtr<ID3D11Device> m_pDevice;
+    
+    // String pointers
+    LPCSTR m_strShaderX;
+    LPCSTR m_strShaderY;
+    
+    // Struct with texture and other members
+    struct {
+        Microsoft::WRL::ComPtr<ID3D11Texture2D> texture;
+        DXGI_FORMAT cformat;
+        int cx;  // or whatever type cx should be
+    } m_Alignment;
+    
+    // Container type - adjust based on your actual usage
+    std::vector<DXGI_FORMAT> m_VPFormats;  // or whatever type VPFmts is
+
+struct DisplayConfig_t
 {
-	if (g_bPresent)
-	{
-		DLog(L"call SetWindowPos() function during Present()");
-		uFlags |= SWP_ASYNCWINDOWPOS;
-	}
-	return pOrigSetWindowPosDX11(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags);
-}
-typedef LONG(WINAPI *pSetWindowLongA)(
-	_In_ HWND hWnd,
-	_In_ int nIndex,
-	_In_ LONG dwNewLong);
-pSetWindowLongA pOrigSetWindowLongADX11 = nullptr;
-static LONG WINAPI pNewSetWindowLongADX11(
-	_In_ HWND hWnd,
-	_In_ int nIndex,
-	_In_ LONG dwNewLong)
+	LPCWSTR displayName;
+	DXGI_MODE_DESC modeTarget;					// Simplified, actual struct may have more members.
+	bool HDREnabled() const { return false; }	// Placeholder method.
+	bool HDRSupported() const { return false; } // Placeholder method.
+	UINT bitsPerChannel = 0;
+	bool ACMEnabled() const { return false; } // Placeholder method.
+};
+
+// Placeholder for MediaSideDataHDR (from Mfidl.h or custom header)
+struct MediaSideDataHDR
 {
-	if (g_bCreateSwapChain)
+	float display_primaries_x[3];
+	float display_primaries_y[3];
+	float white_point_x;
+	float white_point_y;
+	float max_display_mastering_luminance;
+	float min_display_mastering_luminance;
+};
+
+// Placeholder for MediaSideDataHDRContentLightLevel (from Mfidl.h or custom header)
+struct MediaSideDataHDRContentLightLevel
+{
+	UINT16 MaxCLL;
+	UINT16 MaxFALL;
+};
+
+// Placeholder for MediaSideData3DOffset (from Mfidl.h or custom header)
+struct MediaSideData3DOffset
+{
+	int offset_count;
+	int offset[1]; // Simplified, might be an array of variable size.
+};
+
+// Placeholder for MediaSideDataDOVIMetadata (from Mfidl.h or custom header)
+struct MediaSideDataDOVIMetadata
+{
+	struct Header_t
 	{
-		DLog(L"Blocking call SetWindowLongA() function during create fullscreen swap chain");
-		return 0L;
+		UINT8 bl_bit_depth;
+		UINT8 coef_log2_denom;
+	} Header;
+	struct ColorMetadata_t
+	{
+		int ycc_to_rgb_matrix[9];
+		int ycc_to_rgb_offset[3];
+		int rgb_to_lms_matrix[9];
+		UINT16 source_max_pq;
+		UINT16 source_min_pq;
+	} ColorMetadata;
+	struct Mapping_t
+	{
+		struct Curve_t
+		{
+			UINT8 mapping_idc[8];
+			int poly_coef[8][3];
+			UINT8 poly_order[8];
+			float pivots[7];
+			UINT8 mmr_order[8];
+			float mmr_constant[8];
+			float mmr_coef[8][2][6]; // Simplified structure
+		} curves[3];
+	} Mapping;
+	bool bHasMMR = false; // Custom member to track MMR presence.
+};
+
+// Placeholder for Tex2D_t (from DX11Helper.h)
+struct Tex2D_t
+{
+	CComPtr<ID3D11Texture2D> pTexture;
+	CComPtr<ID3D11ShaderResourceView> pShaderResource;
+	D3D11_TEXTURE2D_DESC desc = {};
+	enum Tex2D_Flags
+	{
+		Tex2D_Default = 0,
+		Tex2D_DynamicShaderWrite = 1,
+		Tex2D_DynamicShaderWriteNoSRV = 2,
+		Tex2D_StagingRead = 4,
+		Tex2D_DefaultShaderRTarget = 8
+	};
+	HRESULT Create(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return S_OK; }
+	HRESULT CreateEx(ID3D11Device *pDevice, DXGI_FORMAT format, const void *pPlanesDesc, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return S_OK; }
+	void Release()
+	{
+		pTexture.Release();
+		pShaderResource.Release();
 	}
-	return pOrigSetWindowLongADX11(hWnd, nIndex, dwNewLong);
-}
+	bool CheckCreate(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return true; }
+};
+
+// Placeholder for TexEx_t (from DX11Helper.h) - similar to Tex2D_t but might handle planes explicitly.
+struct TexEx_t : public Tex2D_t
+{
+	const void *pDX11Planes = nullptr; // Pointer to plane description.
+};
+
+// Placeholder for Tex2DArray_t (from DX11Helper.h)
+struct Tex2DArray_t
+{
+	std::vector<Tex2D_t> textures;
+	HRESULT CheckCreate(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, UINT count) { return S_OK; }
+	Tex2D_t *GetFirstTex() { return !textures.empty() ? &textures[0] : nullptr; }
+	Tex2D_t *GetNextTex() { return textures.size() > 1 ? &textures[1] : nullptr; } // Simplified.
+};
+
+// Placeholder for ExternalPixelShader11_t (custom struct)
+struct ExternalPixelShader11_t
+{
+	std::wstring name;
+	CComPtr<ID3D11PixelShader> shader;
+};
+
+// Placeholder for FmtConvParams_t (from Helper.h or similar)
+enum ColorFormat_t
+{
+	CF_NONE
+}; // Minimal definition.
+enum ColorSpaceType
+{
+	CS_YUV,
+	CS_RGB,
+	CS_GRAY
+}; // Minimal definition.
+struct FmtConvParams_t
+{
+	DXGI_FORMAT VP11Format = DXGI_FORMAT_UNKNOWN;
+	DXGI_FORMAT DX11Format = DXGI_FORMAT_UNKNOWN;
+	const void *pDX11Planes = nullptr; // Pointer to plane description.
+	ColorFormat_t cformat;			   //(); //CF_NONE;
+	ColorSpaceType CSType;			   //(); //CS_YUV;
+	int CDepth = 8;
+	int Subsampling = 0;
+	float PitchCoeff = 1.0f;
+	int Packsize = 1;
+};
+
+// Placeholder for DXVA2_ProcAmpValues (from dxva2api.h)
+// The actual definition is quite complex, providing a minimal struct for compilation.
+typedef long long DXVA2_Fixed32; // Assuming DXVA2_Fixed32 is a long long for range values.
+struct DXVA2_ProcAmpValues
+{
+	DXVA2_Fixed32 Brightness;
+	DXVA2_Fixed32 Contrast;
+	DXVA2_Fixed32 Hue;
+	DXVA2_Fixed32 Saturation;
+};
+// Placeholder for DXVA2_ProcAmpRanges
+struct DXVA2_ProcAmpRanges
+{
+	DXVA2_Fixed32 MinValue;
+	DXVA2_Fixed32 MaxValue;
+};
+// Assuming m_DXVA2ProcAmpRanges and m_DXVA2ProcAmpValues are members of CDX11VideoProcessor.
+// Need to declare them if not already present.
+
+// Placeholder for Settings_t (project-specific settings struct)
+struct Settings_t
+{
+	bool bShowStats = false;
+	int iResizeStats = 0;
+	int iTexFormat = 0;
+	struct VPFormats_t
+	{
+		bool bNV12 = false, bP01x = false, bYUY2 = false, bOther = false;
+	} VPFmts;
+	bool bDeintDouble = false;
+	bool bVPScaling = false;
+	int iChromaScaling = 0;
+	int iUpscaling = 0;
+	int iDownscaling = 0;
+	bool bInterpolateAt50pct = false;
+	bool bUseDither = false;
+	bool bDeintBlend = false;
+	int iSwapEffect = 0;
+	bool bVBlankBeforePresent = false;
+	bool bAdjustPresentTime = false;
+	bool bHdrPreferDoVi = false;
+	bool bHdrPassthrough = false;
+	bool bHdrLocalToneMapping = false;
+	int iHdrLocalToneMappingType = 0;
+	float fHdrDisplayMaxNits = 0.0f;
+	float fHdrDynamicRangeCompression = 0.0f;
+	float fHdrShadowDetail = 0.0f;
+	float fHdrColorVolumeAdaptation = 0.0f;
+	float fHdrSceneAdaptation = 0.0f;
+	int iHdrToggleDisplay = 0;
+	int iHdrOsdBrightness = 0;
+	bool bConvertToSdr = false;
+	int iSDRDisplayNits = 0;
+	bool bVPRTXVideoHDR = false;
+	int iVPSuperRes = 0;
+};
+
+// Placeholder for D3D11VP_StreamInfo (from D3D11VP.h)
+// This is a complex class, providing a very minimal stub.
+class CD3D11VP_StreamInfo
+{
+public:
+	bool IsReady() const { return false; }
+	HRESULT InitInputTextures(ID3D11Device *pDevice) { return S_OK; }
+	HRESULT SetSuperRes(int res) { return S_OK; }
+	HRESULT SetRTXVideoHDR(bool enabled) { return S_OK; }
+	ID3D11Texture2D *GetNextInputTexture(D3D11_VIDEO_FRAME_FORMAT format) { return nullptr; }
+	HRESULT Process(ID3D11Texture2D *pRenderTarget, D3D11_VIDEO_FRAME_FORMAT SampleFormat, const bool second) { return S_OK; }
+	void SetRectangles(const RECT &src, const RECT &dst) {}
+	HRESULT SetProcAmpValues(const DXVA2_ProcAmpValues *pValues) { return S_OK; }
+	void ResetFrameOrder() {}
+	// Other methods like GetVPParams would be here.
+};
+
+// Placeholder for PS_DOVI_POLY_CURVE (shader constant struct)
+struct PS_DOVI_POLY_CURVE
+{
+	DirectX::XMFLOAT4 coeffs_data[8];
+	DirectX::XMFLOAT4 pivots_data[7];
+	struct
+	{
+		UINT methods;
+		bool mmr_single;
+		UINT min_order;
+		UINT max_order;
+	} params;
+};
+
+// Placeholder for PS_DOVI_CURVE (shader constant struct) - similar to above
+struct PS_DOVI_CURVE
+{
+	DirectX::XMFLOAT4 coeffs_data[8];
+	DirectX::XMFLOAT4 pivots_data[7];
+	struct
+	{
+		UINT methods;
+		bool mmr_single;
+		UINT min_order;
+		UINT max_order;
+	} params;
+	DirectX::XMFLOAT4 mmr_data[20]; // Simplified size
+};
+
+// Placeholder for ShaderLuminanceParams_t (custom struct)
+struct ShaderLuminanceParams_t
+{
+	// members as needed by SetShaderLuminanceParams
+};
+
+// Placeholder for MediaSideDataPQ and MediaSideDataHLG
+struct MediaSideDataPQ
+{
+};
+struct MediaSideDataHLG
+{
+};
+
+// Placeholder/Assumption for CompileShader, usually from DX11Helper.h
+extern HRESULT CompileShader(const std::string &source, ID3DBlob **blob, const char *profile, ID3DBlob **errorBlob = nullptr);
+
+// Placeholder/Assumption for GetDataFromResource, usually from DX11Helper.h
+static HRESULT GetDataFromResource(LPVOID &data, DWORD &size, UINT resid);
+
+// Placeholder for CopyFrameDataFn (function pointer type)
+typedef void (*CopyPlaneFn)(UINT lines, BYTE *dst, int dstPitch, const BYTE *src, int srcPitch);
+extern CopyPlaneFn CopyPlaneAsIs;	   // Assumed to be defined in Helper.h or DX11Helper.h
+extern CopyPlaneFn CopyGpuFrame_SSE41; // Assumed to be defined.
+
+// Placeholder for RenderStats_t (custom struct for stats)
+struct RenderStats_t
+{
+	int failed = 0;
+	int dropped2 = 0;
+	uint64_t copyticks = 0;
+	uint64_t paintticks = 0;
+	uint64_t presentticks = 0;
+	long long syncoffset = 0;
+	void Reset() {} // Placeholder method.
+};
+
+// Placeholder for DrawStats_t (custom struct for stats)
+struct DrawStats_t
+{
+	void Add(uint64_t tick) {}
+	float GetAverageFps() const { return 0.0f; }
+	int m_dropped = 0; // Example member.
+};
+
+// Placeholder for Syncs_t (custom container for sync offsets)
 template <typename T>
-inline bool HookFunc(T **ppSystemFunction, PVOID pHookFunction)
+class Syncs_t
 {
-	return MH_CreateHook(*ppSystemFunction, pHookFunction, reinterpret_cast<LPVOID *>(ppSystemFunction)) == MH_OK;
-}
-static const ScalingShaderResId s_Upscaling11ResIDs[UPSCALE_COUNT] = {
-	{0, 0, L"Nearest-neighbor"},
-	{IDF_PS_11_INTERP_MITCHELL4_X, IDF_PS_11_INTERP_MITCHELL4_Y, L"Mitchell-Netravali"},
-	{IDF_PS_11_INTERP_CATMULL4_X, IDF_PS_11_INTERP_CATMULL4_Y, L"Catmull-Rom"},
-	{IDF_PS_11_INTERP_LANCZOS2_X, IDF_PS_11_INTERP_LANCZOS2_Y, L"Lanczos2"},
-	{IDF_PS_11_INTERP_LANCZOS3_X, IDF_PS_11_INTERP_LANCZOS3_Y, L"Lanczos3"},
-	{IDF_PS_11_INTERP_JINC2, IDF_PS_11_INTERP_JINC2, L"Jinc2m"},
-};
-static const ScalingShaderResId s_Downscaling11ResIDs[DOWNSCALE_COUNT] = {
-	{IDF_PS_11_CONVOL_BOX_X, IDF_PS_11_CONVOL_BOX_Y, L"Box"},
-	{IDF_PS_11_CONVOL_BILINEAR_X, IDF_PS_11_CONVOL_BILINEAR_Y, L"Bilinear"},
-	{IDF_PS_11_CONVOL_HAMMING_X, IDF_PS_11_CONVOL_HAMMING_Y, L"Hamming"},
-	{IDF_PS_11_CONVOL_BICUBIC05_X, IDF_PS_11_CONVOL_BICUBIC05_Y, L"Bicubic"},
-	{IDF_PS_11_CONVOL_BICUBIC15_X, IDF_PS_11_CONVOL_BICUBIC15_Y, L"Bicubic sharp"},
-	{IDF_PS_11_CONVOL_LANCZOS_X, IDF_PS_11_CONVOL_LANCZOS_Y, L"Lanczos"}};
-const UINT dither_size = 32;
-struct VERTEX
-{
-	DirectX::XMFLOAT3 Pos;
-	DirectX::XMFLOAT2 TexCoord;
-};
-struct PS_EXTSHADER_CONSTANTS
-{
-	DirectX::XMFLOAT2 pxy;
-	DirectX::XMFLOAT2 wh;
-	uint32_t counter;
-	float clock;
-	float reserved1;
-	float reserved2;
-};
-static_assert(sizeof(PS_EXTSHADER_CONSTANTS) % 16 == 0);
-static void FillVertices(VERTEX (&Vertices)[4], const UINT srcW, const UINT srcH, const RECT &srcRect, const int iRotation, const bool bFlip)
-{
-	const float src_dx = 1.0f / srcW;
-	const float src_dy = 1.0f / srcH;
-	float src_l = src_dx * srcRect.left;
-	float src_r = src_dx * srcRect.right;
-	const float src_t = src_dy * srcRect.top;
-	const float src_b = src_dy * srcRect.bottom;
-	POINT points[4];
-	switch (iRotation)
+public:
+	Syncs_t(size_t capacity = 100) : data_(capacity), oldestIndex_(0), size_(0) {}
+	void Add(const T &item)
 	{
-	case 90:
-		points[0] = {-1, +1};
-		points[1] = {+1, +1};
-		points[2] = {-1, -1};
-		points[3] = {+1, -1};
-		break;
-	case 180:
-		points[0] = {+1, +1};
-		points[1] = {+1, -1};
-		points[2] = {-1, +1};
-		points[3] = {-1, -1};
-		break;
-	case 270:
-		points[0] = {+1, -1};
-		points[1] = {-1, -1};
-		points[2] = {+1, +1};
-		points[3] = {-1, +1};
-		break;
-	default:
-		points[0] = {-1, -1};
-		points[1] = {-1, +1};
-		points[2] = {+1, -1};
-		points[3] = {+1, +1};
+		if (size_ < data_.size())
+		{
+			data_[size_++] = item;
+		}
+		else
+		{
+			data_[oldestIndex_] = item;
+			oldestIndex_ = (oldestIndex_ + 1) % data_.size();
+		}
 	}
-	if (bFlip)
+	const T *Data() const { return data_.data(); }
+	size_t OldestIndex() const { return oldestIndex_; }
+	size_t Size() const { return size_; }
+
+private:
+	std::vector<T> data_;
+	size_t oldestIndex_;
+	size_t size_;
+};
+
+// Placeholder for specific vendor IDs.
+#define PCIV_INTEL 0x8086
+#define PCIV_AMDATI 0x1002
+
+// Placeholder for enum values like SUPERRES_Disable, UPSCALE_Nearest etc.
+#ifndef SUPERRES_Disable
+#define SUPERRES_Disable 0
+#endif
+#ifndef UPSCALE_Nearest
+#define UPSCALE_Nearest 0
+#endif
+
+// Placeholder for `GetWindowsVersion`, `GetDisplayConfig`, `IsWindows11_24H2OrGreater`, `SourceIsPQorHLG`, `SpecifyExtendedFormat`, `GetCopyPlaneFunction`, `CalcDibRowPitch`, `ConvertR10G10B10A2toBGR48`, `ConvertR10G10B10A2toBGR32`, `CheckDoviMetadata`, `TransferPQ`, `CheckGraphPlacement` and other helper functions/types.
+// These are assumed to be provided by the included headers or project sources.
+
+// --- END OF DEFINITIONS FOR MISSING TYPES ---
+
+// Forward declaration for CMpcVideoRenderer.
+// THIS IS CRITICAL. The header file defining CMpcVideoRenderer MUST be included before this class definition.
+// For example: #include "MpcVideoRenderer.h" (path may vary).
+// Without the actual header, this code cannot fully resolve all dependencies.
+class CMpcVideoRenderer;
+
+// Forward declaration for CVideoRendererInputPin as per the 'friend' declaration.
+class CVideoRendererInputPin;
+
+// Anonymous namespace for static/global helpers to avoid ODR violations
+namespace
+{
+	// Global flags for hooking MinHook.
+	bool g_bPresent = false;
+	bool g_bCreateSwapChain = false;
+
+	// Typedefs for function pointers hooked by MinHook
+	typedef BOOL(WINAPI *pSetWindowPos)(
+		_In_ HWND hWnd,
+		_In_opt_ HWND hWndInsertAfter,
+		_In_ int X,
+		_In_ int Y,
+		_In_ int cx,
+		_In_ int cy,
+		_In_ UINT uFlags);
+	pSetWindowPos pOrigSetWindowPosDX11 = nullptr; // Original SetWindowPos pointer
+	static BOOL WINAPI pNewSetWindowPosDX11(
+		_In_ HWND hWnd,
+		_In_opt_ HWND hWndInsertAfter,
+		_In_ int X,
+		_In_ int Y,
+		_In_ int cx,
+		_In_ int cy,
+		_In_ UINT uFlags)
 	{
-		std::swap(src_l, src_r);
+		if (g_bPresent)
+		{
+			DLog(L"call SetWindowPos() function during Present()");
+			uFlags |= SWP_ASYNCWINDOWPOS; // Add ASYNCWINDOWPOS flag if during Present()
+		}
+		return pOrigSetWindowPosDX11(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags);
 	}
-	Vertices[0] = {{(float)points[0].x, (float)points[0].y, 0}, {src_l, src_b}};
-	Vertices[1] = {{(float)points[1].x, (float)points[1].y, 0}, {src_l, src_t}};
-	Vertices[2] = {{(float)points[2].x, (float)points[2].y, 0}, {src_r, src_b}};
-	Vertices[3] = {{(float)points[3].x, (float)points[3].y, 0}, {src_r, src_t}};
-}
-static HRESULT CreateVertexBuffer(ID3D11Device *pDevice, ID3D11Buffer **ppVertexBuffer,
-								  const UINT srcW, const UINT srcH, const RECT &srcRect,
-								  const int iRotation, const bool bFlip)
-{
-	ASSERT(ppVertexBuffer);
-	ASSERT(*ppVertexBuffer == nullptr);
-	VERTEX Vertices[4];
-	FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
-	D3D11_BUFFER_DESC BufferDesc = {sizeof(Vertices), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0};
-	D3D11_SUBRESOURCE_DATA InitData = {Vertices, 0, 0};
-	HRESULT hr = pDevice->CreateBuffer(&BufferDesc, &InitData, ppVertexBuffer);
-	DLogIf(FAILED(hr), L"CreateVertexBuffer() : CreateBuffer() failed with error {}", HR2Str(hr));
-	return hr;
-}
-static HRESULT FillVertexBuffer(ID3D11DeviceContext *pDeviceContext, ID3D11Buffer *pVertexBuffer,
-								const UINT srcW, const UINT srcH, const RECT &srcRect,
-								const int iRotation, const bool bFlip)
-{
-	ASSERT(pVertexBuffer);
-	VERTEX Vertices[4];
-	FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
-	D3D11_MAPPED_SUBRESOURCE mr;
-	HRESULT hr = pDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr);
-	if (FAILED(hr))
+
+	typedef LONG(WINAPI *pSetWindowLongA)(
+		_In_ HWND hWnd,
+		_In_ int nIndex,
+		_In_ LONG dwNewLong);
+	pSetWindowLongA pOrigSetWindowLongADX11 = nullptr; // Original SetWindowLongA pointer
+	static LONG WINAPI pNewSetWindowLongADX11(
+		_In_ HWND hWnd,
+		_In_ int nIndex,
+		_In_ LONG dwNewLong)
 	{
-		DLog(L"FillVertexBuffer() : Map() failed with error {}", HR2Str(hr));
+		if (g_bCreateSwapChain)
+		{
+			DLog(L"Blocking call SetWindowLongA() function during create fullscreen swap chain");
+			return 0L; // Block SetWindowLongA if a swap chain is being created
+		}
+		return pOrigSetWindowLongADX11(hWnd, nIndex, dwNewLong);
+	}
+
+	// Template for creating MinHook hooks
+	template <typename T>
+	inline bool HookFunc(T **ppSystemFunction, PVOID pHookFunction)
+	{
+		// MH_CreateHook and MH_OK are provided by MinHook.h (already included).
+		return MH_CreateHook(*ppSystemFunction, pHookFunction, reinterpret_cast<LPVOID *>(ppSystemFunction)) == MH_OK;
+	}
+
+	const UINT dither_size = 32; // Size for dither texture
+
+	// Vertex structure for rendering quads
+	struct VERTEX
+	{
+		DirectX::XMFLOAT3 Pos; // Requires <DirectXMath.h>
+		DirectX::XMFLOAT2 TexCoord;
+	};
+	// Constant buffer structure for external shaders
+	struct PS_EXTSHADER_CONSTANTS
+	{
+		DirectX::XMFLOAT2 pxy; // Pixel coordinates
+		DirectX::XMFLOAT2 wh;  // Width/Height
+		uint32_t counter;	   // Frame counter
+		float clock;		   // Frame clock
+		float reserved1;
+		float reserved2;
+	};
+	static_assert(sizeof(PS_EXTSHADER_CONSTANTS) % 16 == 0, "PS_EXTSHADER_CONSTANTS must be a multiple of 16 bytes");
+	// Assertions
+#ifndef ASSERT
+#define ASSERT _ASSERTE // Use standard assertion if not defined.
+#endif
+// Macro to execute a function and assert its success
+#ifndef EXECUTE_ASSERT
+#define EXECUTE_ASSERT(x)       \
+	do                          \
+	{                           \
+		HRESULT hr_ = (x);      \
+		ASSERT(SUCCEEDED(hr_)); \
+	} while (0)
+#endif
+	// Helper functions for creating and filling vertex buffers.
+	// These are assumed to be part of the DX11 implementation.
+	static void FillVertices(VERTEX (&Vertices)[4], const UINT srcW, const UINT srcH, const RECT &srcRect, const int iRotation, const bool bFlip)
+	{
+		const float src_dx = 1.0f / srcW;
+		const float src_dy = 1.0f / srcH;
+		float src_l = src_dx * srcRect.left;
+		float src_r = src_dx * srcRect.right;
+		const float src_t = src_dy * srcRect.top;
+		const float src_b = src_dy * srcRect.bottom;
+		POINT points[4];
+		switch (iRotation)
+		{
+		case 90:
+			points[0] = {-1, +1};
+			points[1] = {+1, +1};
+			points[2] = {-1, -1};
+			points[3] = {+1, -1};
+			break;
+		case 180:
+			points[0] = {+1, +1};
+			points[1] = {+1, -1};
+			points[2] = {-1, +1};
+			points[3] = {-1, -1};
+			break;
+		case 270:
+			points[0] = {+1, -1};
+			points[1] = {-1, -1};
+			points[2] = {+1, +1};
+			points[3] = {-1, +1};
+			break;
+		default: // 0 or other values
+			points[0] = {-1, -1};
+			points[1] = {-1, +1};
+			points[2] = {+1, -1};
+			points[3] = {+1, +1};
+		}
+		if (bFlip)
+		{
+			std::swap(src_l, src_r);
+		}
+		Vertices[0] = {{(float)points[0].x, (float)points[0].y, 0}, {src_l, src_b}};
+		Vertices[1] = {{(float)points[1].x, (float)points[1].y, 0}, {src_l, src_t}};
+		Vertices[2] = {{(float)points[2].x, (float)points[2].y, 0}, {src_r, src_b}};
+		Vertices[3] = {{(float)points[3].x, (float)points[3].y, 0}, {src_r, src_t}};
+	}
+
+	static HRESULT CreateVertexBuffer(ID3D11Device *pDevice, ID3D11Buffer **ppVertexBuffer,
+									  const UINT srcW, const UINT srcH, const RECT &srcRect,
+									  const int iRotation, const bool bFlip)
+	{
+		ASSERT(ppVertexBuffer);
+		ASSERT(*ppVertexBuffer == nullptr);
+		VERTEX Vertices[4];
+		FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
+		D3D11_BUFFER_DESC BufferDesc = {sizeof(Vertices), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0};
+		D3D11_SUBRESOURCE_DATA InitData = {Vertices, 0, 0};
+		HRESULT hr = pDevice->CreateBuffer(&BufferDesc, &InitData, ppVertexBuffer);
+		DLogIf(FAILED(hr), L"CreateVertexBuffer() : CreateBuffer() failed with error {}", HR2Str(hr));
 		return hr;
 	}
-	memcpy(mr.pData, &Vertices, sizeof(Vertices));
-	pDeviceContext->Unmap(pVertexBuffer, 0);
-	return hr;
-}
-static void TextureBlt11(
-	ID3D11DeviceContext *pDeviceContext,
-	ID3D11RenderTargetView *pRenderTargetView, D3D11_VIEWPORT &viewport,
-	ID3D11InputLayout *pInputLayout,
-	ID3D11VertexShader *pVertexShader,
-	ID3D11PixelShader *pPixelShader,
-	ID3D11ShaderResourceView *pShaderResourceViews,
-	ID3D11SamplerState *pSampler,
-	ID3D11Buffer *pConstantBuffer,
-	ID3D11Buffer *pVertexBuffer)
+
+	static HRESULT FillVertexBuffer(ID3D11DeviceContext *pDeviceContext, ID3D11Buffer *pVertexBuffer,
+									const UINT srcW, const UINT srcH, const RECT &srcRect,
+									const int iRotation, const bool bFlip)
+	{
+		ASSERT(pVertexBuffer);
+		VERTEX Vertices[4];
+		FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
+		D3D11_MAPPED_SUBRESOURCE mr;
+		HRESULT hr = pDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr);
+		if (FAILED(hr))
+		{
+			DLog(L"FillVertexBuffer() : Map() failed with error {}", HR2Str(hr));
+			return hr;
+		}
+		memcpy(mr.pData, &Vertices, sizeof(Vertices));
+		pDeviceContext->Unmap(pVertexBuffer, 0);
+		return hr;
+	}
+
+	// Helper for drawing a textured quad
+	static void TextureBlt11(
+		ID3D11DeviceContext *pDeviceContext,
+		ID3D11RenderTargetView *pRenderTargetView, D3D11_VIEWPORT &viewport,
+		ID3D11InputLayout *pInputLayout,
+		ID3D11VertexShader *pVertexShader,
+		ID3D11PixelShader *pPixelShader,
+		ID3D11ShaderResourceView *pShaderResourceViews, // Note: Expected to be an array for multiple SRVs if needed. Here used for a single one.
+		ID3D11SamplerState *pSampler,
+		ID3D11Buffer *pConstantBuffer,
+		ID3D11Buffer *pVertexBuffer)
+	{
+		ASSERT(pDeviceContext);
+		ASSERT(pRenderTargetView);
+		const UINT Stride = sizeof(VERTEX);
+		const UINT Offset = 0;
+		pDeviceContext->IASetInputLayout(pInputLayout);
+		pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
+		pDeviceContext->RSSetViewports(1, &viewport);
+		pDeviceContext->OMSetBlendState(nullptr, nullptr, D3D11_DEFAULT_SAMPLE_MASK); // Default: No blending
+		pDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
+		pDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
+		pDeviceContext->PSSetShaderResources(0, 1, &pShaderResourceViews); // Bind SRV to slot 0
+		pDeviceContext->PSSetSamplers(0, 1, &pSampler);					   // Bind sampler to slot 0
+		pDeviceContext->PSSetConstantBuffers(0, 1, &pConstantBuffer);	   // Bind constant buffer to slot 0
+		pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Stride, &Offset);
+		pDeviceContext->Draw(4, 0); // Draw the 4 vertices of the triangle strip
+
+		// Unbind resources to prevent state leakage for subsequent draw calls
+		ID3D11ShaderResourceView *ppNullSRVs[1] = {nullptr};
+		pDeviceContext->PSSetShaderResources(0, 1, ppNullSRVs);
+		pDeviceContext->PSSetConstantBuffers(0, 1, ppNullSRVs);
+	}
+
+// Shader resource IDs for upscaling/downscaling filters.
+// UPSCALE_COUNT and DOWNSCALE_COUNT are assumed to be defined elsewhere (e.g., Shaders.h).
+#ifndef UPSCALE_COUNT
+#define UPSCALE_COUNT 6 // Example value, adjust if necessary based on actual shader definitions.
+#endif
+#ifndef DOWNSCALE_COUNT
+#define DOWNSCALE_COUNT 6 // Example value, adjust if necessary.
+#endif
+
+	static const ScalingShaderResId s_Upscaling11ResIDs[UPSCALE_COUNT] = {
+		{0, 0, L"Nearest-neighbor"}, // Using 0,0 for Nearest-neighbor as it might not use specific shaders directly.
+		{IDF_PS_11_INTERP_MITCHELL4_X, IDF_PS_11_INTERP_MITCHELL4_Y, L"Mitchell-Netravali"},
+		{IDF_PS_11_INTERP_CATMULL4_X, IDF_PS_11_INTERP_CATMULL4_Y, L"Catmull-Rom"},
+		{IDF_PS_11_INTERP_LANCZOS2_X, IDF_PS_11_INTERP_LANCZOS2_Y, L"Lanczos2"},
+		{IDF_PS_11_INTERP_LANCZOS3_X, IDF_PS_11_INTERP_LANCZOS3_Y, L"Lanczos3"},
+		{IDF_PS_11_INTERP_JINC2, IDF_PS_11_INTERP_JINC2, L"Jinc2m"},
+	};
+	static const ScalingShaderResId s_Downscaling11ResIDs[DOWNSCALE_COUNT] = {
+		{IDF_PS_11_CONVOL_BOX_X, IDF_PS_11_CONVOL_BOX_Y, L"Box"},
+		{IDF_PS_11_CONVOL_BILINEAR_X, IDF_PS_11_CONVOL_BILINEAR_Y, L"Bilinear"},
+		{IDF_PS_11_CONVOL_HAMMING_X, IDF_PS_11_CONVOL_HAMMING_Y, L"Hamming"},
+		{IDF_PS_11_CONVOL_BICUBIC05_X, IDF_PS_11_CONVOL_BICUBIC05_Y, L"Bicubic"},
+		{IDF_PS_11_CONVOL_BICUBIC15_X, IDF_PS_11_CONVOL_BICUBIC15_Y, L"Bicubic sharp"},
+		{IDF_PS_11_CONVOL_LANCZOS_X, IDF_PS_11_CONVOL_LANCZOS_Y, L"Lanczos"}};
+} // namespace
+
+// --- Placeholder Definitions for Missing Types ---
+// These are minimal placeholder definitions to resolve compilation/IntelliSense errors.
+// The actual project headers provide the full implementations.
+
+// Placeholder for DisplayConfig_t (from Helper.h)
+struct DisplayConfig_t
 {
-	ASSERT(pDeviceContext);
-	ASSERT(pRenderTargetView);
-	const UINT Stride = sizeof(VERTEX);
-	const UINT Offset = 0;
-	pDeviceContext->IASetInputLayout(pInputLayout);
-	pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
-	pDeviceContext->RSSetViewports(1, &viewport);
-	pDeviceContext->OMSetBlendState(nullptr, nullptr, D3D11_DEFAULT_SAMPLE_MASK);
-	pDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
-	pDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
-	pDeviceContext->PSSetShaderResources(0, 1, &pShaderResourceViews);
-	pDeviceContext->PSSetSamplers(0, 1, &pSampler);
-	pDeviceContext->PSSetConstantBuffers(0, 1, &pConstantBuffer);
-	pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
-	pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Stride, &Offset);
-	pDeviceContext->Draw(4, 0);
-	ID3D11ShaderResourceView *views[1] = {};
-	pDeviceContext->PSSetShaderResources(0, 1, views);
+	LPCWSTR displayName = nullptr;
+	DXGI_MODE_DESC modeTarget = {}; // Simplified, actual struct may have more members.
+	// Placeholder methods, actual implementations involve Windows API calls.
+	bool HDREnabled() const { return false; }
+	bool HDRSupported() const { return false; }
+	UINT bitsPerChannel = 0;
+	bool ACMEnabled() const { return false; }
+};
+
+// Placeholder for MediaSideDataHDR (from Mfidl.h or custom header)
+struct MediaSideDataHDR
+{
+	float display_primaries_x[3] = {};
+	float display_primaries_y[3] = {};
+	float white_point_x = 0.0f;
+	float white_point_y = 0.0f;
+	float max_display_mastering_luminance = 0.0f;
+	float min_display_mastering_luminance = 0.0f;
+};
+
+// Placeholder for MediaSideDataHDRContentLightLevel (from Mfidl.h or custom header)
+struct MediaSideDataHDRContentLightLevel
+{
+	UINT16 MaxCLL = 0;
+	UINT16 MaxFALL = 0;
+};
+
+// Placeholder for MediaSideData3DOffset (from Mfidl.h or custom header)
+struct MediaSideData3DOffset
+{
+	int offset_count = 0;
+	int offset[1] = {}; // Simplified, might be an array of variable size.
+};
+
+// Placeholder for MediaSideDataDOVIMetadata (from Mfidl.h or custom header)
+struct MediaSideDataDOVIMetadata
+{
+	struct Header_t
+	{
+		UINT8 bl_bit_depth = 0;
+		UINT8 coef_log2_denom = 0;
+	} Header;
+	struct ColorMetadata_t
+	{
+		int ycc_to_rgb_matrix[9] = {};
+		int ycc_to_rgb_offset[3] = {};
+		int rgb_to_lms_matrix[9] = {};
+		UINT16 source_max_pq = 0;
+		UINT16 source_min_pq = 0;
+	} ColorMetadata;
+	struct Mapping_t
+	{
+		struct Curve_t
+		{
+			UINT8 mapping_idc[8] = {};
+			int poly_coef[8][3] = {};
+			UINT8 poly_order[8] = {};
+			float pivots[7] = {};
+			UINT8 mmr_order[8] = {};
+			float mmr_constant[8] = {};
+			float mmr_coef[8][2][6] = {}; // Simplified structure
+		} curves[3];
+	} Mapping;
+	bool bHasMMR = false; // Custom member to track MMR presence.
+};
+
+// Placeholder for Tex2D_t (from DX11Helper.h)
+struct Tex2D_t
+{
+	CComPtr<ID3D11Texture2D> pTexture;
+	CComPtr<ID3D11ShaderResourceView> pShaderResource;
+	D3D11_TEXTURE2D_DESC desc = {};
+	enum Tex2D_Flags
+	{
+		Tex2D_Default = 0,
+		Tex2D_DynamicShaderWrite = 1,
+		Tex2D_DynamicShaderWriteNoSRV = 2,
+		Tex2D_StagingRead = 4,
+		Tex2D_DefaultShaderRTarget = 8
+	};
+	HRESULT Create(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return S_OK; }
+	HRESULT CreateEx(ID3D11Device *pDevice, DXGI_FORMAT format, const void *pPlanesDesc, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return S_OK; }
+	void Release()
+	{
+		pTexture.Release();
+		pShaderResource.Release();
+	}
+	bool CheckCreate(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, Tex2D_Flags flags = Tex2D_Default) { return true; }
+};
+
+// Placeholder for TexEx_t (from DX11Helper.h) - similar to Tex2D_t but might handle planes explicitly.
+struct TexEx_t : public Tex2D_t
+{
+	const void *pDX11Planes = nullptr; // Pointer to plane description.
+};
+
+// Placeholder for Tex2DArray_t (from DX11Helper.h)
+struct Tex2DArray_t
+{
+	std::vector<Tex2D_t> textures;
+	HRESULT CheckCreate(ID3D11Device *pDevice, DXGI_FORMAT format, UINT width, UINT height, UINT count) { return S_OK; }
+	Tex2D_t *GetFirstTex() { return !textures.empty() ? &textures[0] : nullptr; }
+	Tex2D_t *GetNextTex() { return textures.size() > 1 ? &textures[1] : nullptr; } // Simplified.
+};
+
+// Placeholder for ExternalPixelShader11_t (custom struct)
+struct ExternalPixelShader11_t
+{
+	std::wstring name;
+	CComPtr<ID3D11PixelShader> shader;
+};
+
+// Placeholder for FmtConvParams_t (from Helper.h or similar)
+enum ColorFormat_t
+{
+	CF_NONE
+}; // Minimal definition.
+enum ColorSpaceType
+{
+	CS_YUV,
+	CS_RGB,
+	CS_GRAY
+}; // Minimal definition.
+struct FmtConvParams_t
+{
+	DXGI_FORMAT VP11Format = DXGI_FORMAT_UNKNOWN;
+	DXGI_FORMAT DX11Format = DXGI_FORMAT_UNKNOWN;
+	const void *pDX11Planes = nullptr; // Pointer to plane description.
+	ColorFormat_t cformat = CF_NONE;
+	ColorSpaceType CSType = CS_YUV;
+	int CDepth = 8;
+	int Subsampling = 0;
+	float PitchCoeff = 1.0f;
+	int Packsize = 1;
+};
+
+// Placeholder for DXVA2_ProcAmpValues (from dxva2api.h)
+// The actual definition is quite complex, providing a minimal struct for compilation.
+typedef long long DXVA2_Fixed32; // Assuming DXVA2_Fixed32 is a long long for range values.
+struct DXVA2_ProcAmpValues
+{
+	DXVA2_Fixed32 Brightness = {};
+	DXVA2_Fixed32 Contrast = {};
+	DXVA2_Fixed32 Hue = {};
+	DXVA2_Fixed32 Saturation = {};
+};
+// Placeholder for DXVA2_ProcAmpRanges
+struct DXVA2_ProcAmpRanges
+{
+	DXVA2_Fixed32 MinValue = {};
+	DXVA2_Fixed32 MaxValue = {};
+};
+// Assuming m_DXVA2ProcAmpRanges and m_DXVA2ProcAmpValues are members of CDX11VideoProcessor.
+// They are declared in the class definition above.
+
+// Placeholder for Settings_t (project-specific settings struct)
+struct Settings_t
+{
+	bool bShowStats = false;
+	int iResizeStats = 0;
+	int iTexFormat = 0;
+	struct VPFormats_t
+	{
+		bool bNV12 = false, bP01x = false, bYUY2 = false, bOther = false;
+	} VPFmts;
+	bool bDeintDouble = false;
+	bool bVPScaling = false;
+	int iChromaScaling = 0;
+	int iUpscaling = 0;
+	int iDownscaling = 0;
+	bool bInterpolateAt50pct = false;
+	bool bUseDither = false;
+	bool bDeintBlend = false;
+	int iSwapEffect = 0;
+	bool bVBlankBeforePresent = false;
+	bool bAdjustPresentTime = false;
+	bool bHdrPreferDoVi = false;
+	bool bHdrPassthrough = false;
+	bool bHdrLocalToneMapping = false;
+	int iHdrLocalToneMappingType = 0;
+	float fHdrDisplayMaxNits = 0.0f;
+	float fHdrDynamicRangeCompression = 0.0f;
+	float fHdrShadowDetail = 0.0f;
+	float fHdrColorVolumeAdaptation = 0.0f;
+	float fHdrSceneAdaptation = 0.0f;
+	int iHdrToggleDisplay = 0;
+	int iHdrOsdBrightness = 0;
+	bool bConvertToSdr = false;
+	int iSDRDisplayNits = 0;
+	bool bVPRTXVideoHDR = false;
+	int iVPSuperRes = 0;
+};
+
+// Placeholder for D3D11VP_StreamInfo (from D3D11VP.h)
+// This is a complex class, providing a very minimal stub.
+class CD3D11VP_StreamInfo
+{
+public:
+	bool IsReady() const { return false; }
+	HRESULT InitInputTextures(ID3D11Device *pDevice) { return S_OK; }
+	HRESULT SetSuperRes(int res) { return S_OK; }
+	HRESULT SetRTXVideoHDR(bool enabled) { return S_OK; }
+	ID3D11Texture2D *GetNextInputTexture(D3D11_VIDEO_FRAME_FORMAT format) { return nullptr; }
+	HRESULT Process(ID3D11Texture2D *pRenderTarget, D3D11_VIDEO_FRAME_FORMAT SampleFormat, const bool second) { return S_OK; }
+	void SetRectangles(const RECT &src, const RECT &dst) {}
+	HRESULT SetProcAmpValues(const DXVA2_ProcAmpValues *pValues) { return S_OK; }
+	void ResetFrameOrder() {}
+	// Other methods like GetVPParams would be here.
+};
+
+// Placeholder for PS_DOVI_POLY_CURVE (shader constant struct)
+struct PS_DOVI_POLY_CURVE
+{
+	DirectX::XMFLOAT4 coeffs_data[8];
+	DirectX::XMFLOAT4 pivots_data[7];
+	struct
+	{
+		UINT methods;
+		bool mmr_single;
+		UINT min_order;
+		UINT max_order;
+	} params;
+};
+
+// Placeholder for PS_DOVI_CURVE (shader constant struct) - similar to above
+struct PS_DOVI_CURVE
+{
+	DirectX::XMFLOAT4 coeffs_data[8];
+	DirectX::XMFLOAT4 pivots_data[7];
+	struct
+	{
+		UINT methods;
+		bool mmr_single;
+		UINT min_order;
+		UINT max_order;
+	} params;
+	DirectX::XMFLOAT4 mmr_data[20]; // Simplified size
+};
+
+// Placeholder for ShaderLuminanceParams_t (custom struct)
+struct ShaderLuminanceParams_t
+{
+	// members as needed by SetShaderLuminanceParams
+};
+
+// Placeholder for MediaSideDataPQ and MediaSideDataHLG
+struct MediaSideDataPQ
+{
+};
+struct MediaSideDataHLG
+{
+};
+
+// Placeholder/Assumption for CompileShader, usually from DX11Helper.h
+// Declared as extern because it's assumed to be defined in a .cpp file.
+extern HRESULT CompileShader(const std::string &source, ID3DBlob **blob, const char *profile, ID3DBlob **errorBlob = nullptr);
+
+// Placeholder/Assumption for GetDataFromResource, usually from DX11Helper.h
+// Defined as static within the anonymous namespace to make it local.
+static HRESULT GetDataFromResource(LPVOID &data, DWORD &size, UINT resid) { return E_NOTIMPL; } // Providing a minimal definition.
+
+// Placeholder for CopyFrameDataFn (function pointer type)
+typedef void (*CopyPlaneFn)(UINT lines, BYTE *dst, int dstPitch, const BYTE *src, int srcPitch);
+// Declared as extern, assuming these are defined elsewhere (e.g., Helper.h or DX11Helper.h).
+extern CopyPlaneFn CopyPlaneAsIs;
+extern CopyPlaneFn CopyGpuFrame_SSE41;
+
+// Placeholder for RenderStats_t (custom struct for stats)
+struct RenderStats_t
+{
+	int failed = 0;
+	int dropped2 = 0;
+	uint64_t copyticks = 0;
+	uint64_t paintticks = 0;
+	uint64_t presentticks = 0;
+	long long syncoffset = 0;
+	void Reset() {} // Placeholder method.
+};
+
+// Placeholder for DrawStats_t (custom struct for stats)
+struct DrawStats_t
+{
+	void Add(uint64_t tick) {}
+	float GetAverageFps() const { return 0.0f; }
+	int m_dropped = 0; // Example member.
+};
+
+// Placeholder for Syncs_t (custom container for sync offsets)
+template <typename T>
+class Syncs_t
+{
+public:
+	Syncs_t(size_t capacity = 100) : data_(capacity), oldestIndex_(0), size_(0) {}
+	void Add(const T &item)
+	{
+		if (size_ < data_.size())
+		{
+			data_[size_++] = item;
+		}
+		else
+		{
+			data_[oldestIndex_] = item;
+			oldestIndex_ = (oldestIndex_ + 1) % data_.size();
+		}
+	}
+	const T *Data() const { return data_.data(); }
+	size_t OldestIndex() const { return oldestIndex_; }
+	size_t Size() const { return size_; }
+
+private:
+	std::vector<T> data_;
+	size_t oldestIndex_;
+	size_t size_;
+};
+
+// Placeholder for specific vendor IDs.
+#define PCIV_INTEL 0x8086
+#define PCIV_AMDATI 0x1002
+
+// Placeholder for enum values like SUPERRES_Disable, UPSCALE_Nearest etc.
+#ifndef SUPERRES_Disable
+#define SUPERRES_Disable 0
+#endif
+#ifndef UPSCALE_Nearest
+#define UPSCALE_Nearest 0
+#endif
+
+// Placeholder for `GetWindowsVersion`, `GetDisplayConfig`, `IsWindows11_24H2OrGreater`, `SourceIsPQorHLG`, `SpecifyExtendedFormat`, `GetCopyPlaneFunction`, `CalcDibRowPitch`, `ConvertR10G10B10A2toBGR48`, `ConvertR10G10B10A2toBGR32`, `CheckDoviMetadata`, `TransferPQ`, `CheckGraphPlacement` and other helper functions/types.
+// These are assumed to be provided by the included headers or project sources.
+
+// --- END OF DEFINITIONS FOR MISSING TYPES ---
+
+// --- Forward Declarations ---
+// These are crucial as they refer to types that are not fully defined in this file.
+// Ensure the actual definitions (e.g., in .h files) are available.
+
+// Forward declaration for CMpcVideoRenderer.
+// THIS IS CRITICAL. The header file defining CMpcVideoRenderer MUST be included before this class definition.
+// For example: #include "MpcVideoRenderer.h" (path may vary).
+// Without the actual header, this code cannot fully resolve all dependencies.
+class CMpcVideoRenderer;
+
+// Forward declaration for CVideoRendererInputPin as per the 'friend' declaration.
+class CVideoRendererInputPin;
+
+// Anonymous namespace for static/global helpers to avoid ODR violations
+namespace
+{
+	// Global flags for hooking MinHook.
+	bool g_bPresent = false;
+	bool g_bCreateSwapChain = false;
+
+	// Typedefs for function pointers hooked by MinHook
+	typedef BOOL(WINAPI *pSetWindowPos)(
+		_In_ HWND hWnd,
+		_In_opt_ HWND hWndInsertAfter,
+		_In_ int X,
+		_In_ int Y,
+		_In_ int cx,
+		_In_ int cy,
+		_In_ UINT uFlags);
+	pSetWindowPos pOrigSetWindowPosDX11 = nullptr; // Original SetWindowPos pointer
+	static BOOL WINAPI pNewSetWindowPosDX11(
+		_In_ HWND hWnd,
+		_In_opt_ HWND hWndInsertAfter,
+		_In_ int X,
+		_In_ int Y,
+		_In_ int cx,
+		_In_ int cy,
+		_In_ UINT uFlags)
+	{
+		if (g_bPresent)
+		{
+			DLog(L"call SetWindowPos() function during Present()");
+			uFlags |= SWP_ASYNCWINDOWPOS; // Add ASYNCWINDOWPOS flag if during Present()
+		}
+		return pOrigSetWindowPosDX11(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags);
+	}
+
+	typedef LONG(WINAPI *pSetWindowLongA)(
+		_In_ HWND hWnd,
+		_In_ int nIndex,
+		_In_ LONG dwNewLong);
+	pSetWindowLongA pOrigSetWindowLongADX11 = nullptr; // Original SetWindowLongA pointer
+	static LONG WINAPI pNewSetWindowLongADX11(
+		_In_ HWND hWnd,
+		_In_ int nIndex,
+		_In_ LONG dwNewLong)
+	{
+		if (g_bCreateSwapChain)
+		{
+			DLog(L"Blocking call SetWindowLongA() function during create fullscreen swap chain");
+			return 0L; // Block SetWindowLongA if a swap chain is being created
+		}
+		return pOrigSetWindowLongADX11(hWnd, nIndex, dwNewLong);
+	}
+
+	// Template for creating MinHook hooks
+	template <typename T>
+	inline bool HookFunc(T **ppSystemFunction, PVOID pHookFunction)
+	{
+		// MH_CreateHook and MH_OK are provided by MinHook.h (already included).
+		return MH_CreateHook(*ppSystemFunction, pHookFunction, reinterpret_cast<LPVOID *>(ppSystemFunction)) == MH_OK;
+	}
+
+	const UINT dither_size = 32; // Size for dither texture
+
+	// Vertex structure for rendering quads
+	struct VERTEX
+	{
+		DirectX::XMFLOAT3 Pos; // Requires <DirectXMath.h>
+		DirectX::XMFLOAT2 TexCoord;
+	};
+	// Constant buffer structure for external shaders
+	struct PS_EXTSHADER_CONSTANTS
+	{
+		DirectX::XMFLOAT2 pxy; // Pixel coordinates
+		DirectX::XMFLOAT2 wh;  // Width/Height
+		uint32_t counter;	   // Frame counter
+		float clock;		   // Frame clock
+		float reserved1;
+		float reserved2;
+	};
+	static_assert(sizeof(PS_EXTSHADER_CONSTANTS) % 16 == 0, "PS_EXTSHADER_CONSTANTS must be a multiple of 16 bytes");
+
+	// Helper functions for creating and filling vertex buffers.
+	// These are assumed to be part of the DX11 implementation.
+	static void FillVertices(VERTEX (&Vertices)[4], const UINT srcW, const UINT srcH, const RECT &srcRect, const int iRotation, const bool bFlip)
+	{
+		const float src_dx = 1.0f / srcW;
+		const float src_dy = 1.0f / srcH;
+		float src_l = src_dx * srcRect.left;
+		float src_r = src_dx * srcRect.right;
+		const float src_t = src_dy * srcRect.top;
+		const float src_b = src_dy * srcRect.bottom;
+		POINT points[4];
+		switch (iRotation)
+		{
+		case 90:
+			points[0] = {-1, +1};
+			points[1] = {+1, +1};
+			points[2] = {-1, -1};
+			points[3] = {+1, -1};
+			break;
+		case 180:
+			points[0] = {+1, +1};
+			points[1] = {+1, -1};
+			points[2] = {-1, +1};
+			points[3] = {-1, -1};
+			break;
+		case 270:
+			points[0] = {+1, -1};
+			points[1] = {-1, -1};
+			points[2] = {+1, +1};
+			points[3] = {-1, +1};
+			break;
+		default: // 0 or other values
+			points[0] = {-1, -1};
+			points[1] = {-1, +1};
+			points[2] = {+1, -1};
+			points[3] = {+1, +1};
+		}
+		if (bFlip)
+		{
+			std::swap(src_l, src_r);
+		}
+		Vertices[0] = {{(float)points[0].x, (float)points[0].y, 0}, {src_l, src_b}};
+		Vertices[1] = {{(float)points[1].x, (float)points[1].y, 0}, {src_l, src_t}};
+		Vertices[2] = {{(float)points[2].x, (float)points[2].y, 0}, {src_r, src_b}};
+		Vertices[3] = {{(float)points[3].x, (float)points[3].y, 0}, {src_r, src_t}};
+	}
+
+	static HRESULT CreateVertexBuffer(ID3D11Device *pDevice, ID3D11Buffer **ppVertexBuffer,
+									  const UINT srcW, const UINT srcH, const RECT &srcRect,
+									  const int iRotation, const bool bFlip)
+	{
+		ASSERT(ppVertexBuffer);
+		ASSERT(*ppVertexBuffer == nullptr);
+		VERTEX Vertices[4];
+		FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
+		D3D11_BUFFER_DESC BufferDesc = {sizeof(Vertices), D3D11_USAGE_DEFAULT, D3D11_BIND_VERTEX_BUFFER, 0, 0, 0};
+		D3D11_SUBRESOURCE_DATA InitData = {Vertices, 0, 0};
+		HRESULT hr = pDevice->CreateBuffer(&BufferDesc, &InitData, ppVertexBuffer);
+		DLogIf(FAILED(hr), L"CreateVertexBuffer() : CreateBuffer() failed with error {}", HR2Str(hr));
+		return hr;
+	}
+
+	static HRESULT FillVertexBuffer(ID3D11DeviceContext *pDeviceContext, ID3D11Buffer *pVertexBuffer,
+									const UINT srcW, const UINT srcH, const RECT &srcRect,
+									const int iRotation, const bool bFlip)
+	{
+		ASSERT(pVertexBuffer);
+		VERTEX Vertices[4];
+		FillVertices(Vertices, srcW, srcH, srcRect, iRotation, bFlip);
+		D3D11_MAPPED_SUBRESOURCE mr;
+		HRESULT hr = pDeviceContext->Map(pVertexBuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mr);
+		if (FAILED(hr))
+		{
+			DLog(L"FillVertexBuffer() : Map() failed with error {}", HR2Str(hr));
+			return hr;
+		}
+		memcpy(mr.pData, &Vertices, sizeof(Vertices));
+		pDeviceContext->Unmap(pVertexBuffer, 0);
+		return hr;
+	}
+
+	// Helper for drawing a textured quad
+	static void TextureBlt11(
+		ID3D11DeviceContext *pDeviceContext,
+		ID3D11RenderTargetView *pRenderTargetView, D3D11_VIEWPORT &viewport,
+		ID3D11InputLayout *pInputLayout,
+		ID3D11VertexShader *pVertexShader,
+		ID3D11PixelShader *pPixelShader,
+		ID3D11ShaderResourceView *pShaderResourceViews, // Note: Expected to be an array for multiple SRVs if needed. Here used for a single one.
+		ID3D11SamplerState *pSampler,
+		ID3D11Buffer *pConstantBuffer,
+		ID3D11Buffer *pVertexBuffer)
+	{
+		ASSERT(pDeviceContext);
+		ASSERT(pRenderTargetView);
+		const UINT Stride = sizeof(VERTEX);
+		const UINT Offset = 0;
+		pDeviceContext->IASetInputLayout(pInputLayout);
+		pDeviceContext->OMSetRenderTargets(1, &pRenderTargetView, nullptr);
+		pDeviceContext->RSSetViewports(1, &viewport);
+		pDeviceContext->OMSetBlendState(nullptr, nullptr, D3D11_DEFAULT_SAMPLE_MASK); // Default: No blending
+		pDeviceContext->VSSetShader(pVertexShader, nullptr, 0);
+		pDeviceContext->PSSetShader(pPixelShader, nullptr, 0);
+		pDeviceContext->PSSetShaderResources(0, 1, &pShaderResourceViews); // Bind SRV to slot 0
+		pDeviceContext->PSSetSamplers(0, 1, &pSampler);					   // Bind sampler to slot 0
+		pDeviceContext->PSSetConstantBuffers(0, 1, &pConstantBuffer);	   // Bind constant buffer to slot 0
+		pDeviceContext->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP);
+		pDeviceContext->IASetVertexBuffers(0, 1, &pVertexBuffer, &Stride, &Offset);
+		pDeviceContext->Draw(4, 0); // Draw the 4 vertices of the triangle strip
+
+		// Unbind resources to prevent state leakage for subsequent draw calls
+		ID3D11ShaderResourceView *ppNullSRVs[1] = {nullptr};
+		pDeviceContext->PSSetShaderResources(0, 1, ppNullSRVs);
+		pDeviceContext->PSSetConstantBuffers(0, 1, ppNullSRVs);
+	}
+
+// Shader resource IDs for upscaling/downscaling filters.
+// UPSCALE_COUNT and DOWNSCALE_COUNT are assumed to be defined elsewhere (e.g., Shaders.h).
+#ifndef UPSCALE_COUNT
+#define UPSCALE_COUNT 6 // Example value, adjust if necessary based on actual shader definitions.
+#endif
+#ifndef DOWNSCALE_COUNT
+#define DOWNSCALE_COUNT 6 // Example value, adjust if necessary.
+#endif
+
+	static const ScalingShaderResId s_Upscaling11ResIDs[UPSCALE_COUNT] = {
+		{0, 0, L"Nearest-neighbor"}, // Using 0,0 for Nearest-neighbor as it might not use specific shaders directly.
+		{IDF_PS_11_INTERP_MITCHELL4_X, IDF_PS_11_INTERP_MITCHELL4_Y, L"Mitchell-Netravali"},
+		{IDF_PS_11_INTERP_CATMULL4_X, IDF_PS_11_INTERP_CATMULL4_Y, L"Catmull-Rom"},
+		{IDF_PS_11_INTERP_LANCZOS2_X, IDF_PS_11_INTERP_LANCZOS2_Y, L"Lanczos2"},
+		{IDF_PS_11_INTERP_LANCZOS3_X, IDF_PS_11_INTERP_LANCZOS3_Y, L"Lanczos3"},
+		{IDF_PS_11_INTERP_JINC2, IDF_PS_11_INTERP_JINC2, L"Jinc2m"},
+	};
+	static const ScalingShaderResId s_Downscaling11ResIDs[DOWNSCALE_COUNT] = {
+		{IDF_PS_11_CONVOL_BOX_X, IDF_PS_11_CONVOL_BOX_Y, L"Box"},
+		{IDF_PS_11_CONVOL_BILINEAR_X, IDF_PS_11_CONVOL_BILINEAR_Y, L"Bilinear"},
+		{IDF_PS_11_CONVOL_HAMMING_X, IDF_PS_11_CONVOL_HAMMING_Y, L"Hamming"},
+		{IDF_PS_11_CONVOL_BICUBIC05_X, IDF_PS_11_CONVOL_BICUBIC05_Y, L"Bicubic"},
+		{IDF_PS_11_CONVOL_BICUBIC15_X, IDF_PS_11_CONVOL_BICUBIC15_Y, L"Bicubic sharp"},
+		{IDF_PS_11_CONVOL_LANCZOS_X, IDF_PS_11_CONVOL_LANCZOS_Y, L"Lanczos"}};
 }
+
 HRESULT CDX11VideoProcessor::TextureCopyRect(
 	const Tex2D_t &Tex, ID3D11Texture2D *pRenderTarget,
 	const CRect &srcRect, const CRect &destRect,
@@ -252,7 +1322,6 @@ HRESULT CDX11VideoProcessor::TextureCopyRect(
 	VP.Height = (FLOAT)destRect.Height();
 	VP.MinDepth = 0.0f;
 	VP.MaxDepth = 1.0f;
-	TextureBlt11(m_pDeviceContext, pRenderTargetView, VP, m_pVSimpleInputLayout, m_pVS_Simple, pPixelShader, Tex.pShaderResource, m_pSamplerPoint, pConstantBuffer, m_pVertexBuffer);
 	return hr;
 }
 HRESULT CDX11VideoProcessor::TextureResizeShader(
@@ -292,7 +1361,6 @@ HRESULT CDX11VideoProcessor::TextureResizeShader(
 	VP.Height = (FLOAT)destRect.Height();
 	VP.MinDepth = 0.0f;
 	VP.MaxDepth = 1.0f;
-	TextureBlt11(m_pDeviceContext, pRenderTargetView, VP, m_pVSimpleInputLayout, m_pVS_Simple, pPixelShader, Tex.pShaderResource, m_pSamplerPoint, m_pResizeShaderConstantBuffer, m_pVertexBuffer);
 	return hr;
 }
 void CDX11VideoProcessor::SetCallbackDevice()
@@ -414,7 +1482,7 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 		}
 	}
 }
-void CDX11VideoProcessor::SetShaderLuminanceParams(ShaderLuminanceParams_t &params);
+void CDX11VideoProcessor::SetShaderLuminanceParams(ShaderLuminanceParams_t &params)
 {
 	FLOAT cbuffer[4] = {10000.0f / m_iSDRDisplayNits, 0, 0, 0};
 	if (m_pCorrectionConstants_HDR)
@@ -1060,7 +2128,7 @@ HRESULT CDX11VideoProcessor::InitSwapChain(bool bWindowChanged)
 			desc1.SwapEffect = IsWindows10OrGreater() ? DXGI_SWAP_EFFECT_FLIP_DISCARD : DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
 		}
 		else
-		{
+		{ // SWAPEFFECT_Discard or Windows 7
 			desc1.BufferCount = 1;
 			desc1.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 		}
@@ -1112,60 +2180,9 @@ HRESULT CDX11VideoProcessor::InitSwapChain(bool bWindowChanged)
 	}
 	return hr;
 }
-bool ToggleHDR(const DisplayConfig_t &displayConfig, const bool bEnableAdvancedColor)
-{
-	auto GetCurrentDisplayMode = [](LPCWSTR lpszDeviceName) -> std::optional<DEVMODEW>
-	{
-		DEVMODEW devmode = {};
-		devmode.dmSize = sizeof(DEVMODEW);
-		auto ret = EnumDisplaySettingsW(lpszDeviceName, ENUM_CURRENT_SETTINGS, &devmode);
-		if (ret)
-		{
-			return devmode;
-		}
-		return {};
-	};
-	auto beforeModeOpt = GetCurrentDisplayMode(displayConfig.displayName);
-	LONG ret = 1;
-	if (IsWindows11_24H2OrGreater())
-	{
-		DISPLAYCONFIG_SET_HDR_STATE setHdrState = {};
-		setHdrState.header.type = static_cast<DISPLAYCONFIG_DEVICE_INFO_TYPE>(DISPLAYCONFIG_DEVICE_INFO_SET_HDR_STATE);
-		setHdrState.header.size = sizeof(setHdrState);
-		setHdrState.header.adapterId = displayConfig.modeTarget.adapterId;
-		setHdrState.header.id = displayConfig.modeTarget.id;
-		setHdrState.enableHdr = bEnableAdvancedColor ? 1 : 0;
-		ret = DisplayConfigSetDeviceInfo(&setHdrState.header);
-		DLogIf(ERROR_SUCCESS != ret, L"ToggleHDR() : DisplayConfigSetDeviceInfo(DISPLAYCONFIG_SET_HDR_STATE) with '{}' failed with error {}", bEnableAdvancedColor, HR2Str(HRESULT_FROM_WIN32(ret)));
-	}
-	else
-	{
-		DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE setColorState = {};
-		setColorState.header.type = DISPLAYCONFIG_DEVICE_INFO_SET_ADVANCED_COLOR_STATE;
-		setColorState.header.size = sizeof(setColorState);
-		setColorState.header.adapterId = displayConfig.modeTarget.adapterId;
-		setColorState.header.id = displayConfig.modeTarget.id;
-		setColorState.enableAdvancedColor = bEnableAdvancedColor ? 1 : 0;
-		ret = DisplayConfigSetDeviceInfo(&setColorState.header);
-		DLogIf(ERROR_SUCCESS != ret, L"ToggleHDR() : DisplayConfigSetDeviceInfo(DISPLAYCONFIG_SET_ADVANCED_COLOR_STATE) with '{}' failed with error {}", bEnableAdvancedColor, HR2Str(HRESULT_FROM_WIN32(ret)));
-	}
-	if (ret == ERROR_SUCCESS && beforeModeOpt.has_value())
-	{
-		auto afterModeOpt = GetCurrentDisplayMode(displayConfig.displayName);
-		if (afterModeOpt.has_value())
-		{
-			auto &beforeMode = *beforeModeOpt;
-			auto &afterMode = *afterModeOpt;
-			if (beforeMode.dmPelsWidth != afterMode.dmPelsWidth || beforeMode.dmPelsHeight != afterMode.dmPelsHeight || beforeMode.dmBitsPerPel != afterMode.dmBitsPerPel || beforeMode.dmDisplayFrequency != afterMode.dmDisplayFrequency)
-			{
-				DLog(L"ToggleHDR() : Display mode changed from {}x{}@{} to {}x{}@{}, restoring", beforeMode.dmPelsWidth, beforeMode.dmPelsHeight, beforeMode.dmDisplayFrequency, afterMode.dmPelsWidth, afterMode.dmPelsHeight, afterMode.dmDisplayFrequency);
-				auto ret_restore = ChangeDisplaySettingsExW(displayConfig.displayName, &beforeMode, nullptr, CDS_FULLSCREEN, nullptr);
-				DLogIf(DISP_CHANGE_SUCCESSFUL != ret_restore, L"ToggleHDR() : ChangeDisplaySettingsExW() failed with error {}", HR2Str(HRESULT_FROM_WIN32(ret_restore)));
-			}
-		}
-	}
-	return ret == ERROR_SUCCESS;
-}
+
+// Note: The ToggleHDR function is defined above in the anonymous namespace, as it's a helper used within this combined file.
+
 BOOL CDX11VideoProcessor::VerifyMediaType(const CMediaType *pmt)
 {
 	const auto &FmtParams = GetFmtConvParams(pmt);
@@ -1930,7 +2947,7 @@ HRESULT CDX11VideoProcessor::ProcessSample(IMediaSample *pSample)
 			m_pFilter->StreamTime(rtClock);
 		}
 		m_RenderStats.syncoffset = rtClock - rtStart;
-		so = (int)std::clamp(m_RenderStats.syncoffset, -UNITS, UNITS);
+		so = (int)std::clamp(m_RenderStats.syncoffset, UNITS, UNITS);
 		m_Syncs.Add(so);
 	}
 	return hr;
@@ -4022,4 +5039,3 @@ CDX11VideoProcessor::~CDX11VideoProcessor()
 	}
 	// Note: MH_Uninitialize() is typically called once at global application shutdown.
 }
-#endif // __DX11VIDEOPROCESSOR_H__

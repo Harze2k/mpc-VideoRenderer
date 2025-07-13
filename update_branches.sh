@@ -22,7 +22,7 @@ echo -e "${YELLOW}--- Fetching remote updates ---${NC}"
 git fetch origin
 
 [[ ! -d "Dev" ]] && { echo -e "${RED}Error: 'Dev' directory not found.${NC}"; exit 1; }
-git add gitignore
+git add .gitignore
 git add .
 if git diff --staged --quiet; then
 	echo -e "${YELLOW}No changes to commit.${NC}"
