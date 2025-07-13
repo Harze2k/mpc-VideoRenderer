@@ -127,7 +127,7 @@ struct Settings_t {
 	bool bShowStats;
 	int  iResizeStats;
 	int  iTexFormat;
-	VPEnableFormats_t VPFmts;
+	struct VPEnableFormats_t VPFmts;
 	bool bDeintDouble;
 	bool bVPScaling;
 	int iVPSuperRes;
