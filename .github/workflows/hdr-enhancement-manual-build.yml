@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules:
       - name: Verify branch and commit
         run: |
           Write-Host "Current branch: $(git branch --show-current)"

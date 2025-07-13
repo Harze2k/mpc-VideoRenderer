@@ -1,0 +1,254 @@
+// Microsoft Visual C++ generated resource script.
+//
+#pragma code_page(65001)
+
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "winres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#include ""winres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "#include ""res\\MpcVideoRenderer.rc2""\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_MAINPROPPAGE DIALOGEX 0, 0, 420, 450
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD
+FONT 8, "MS Shell Dlg", 400, 0, 0x0
+BEGIN
+    CONTROL         "Use Direct3D 11",IDC_CHECK1,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,10,4,68,10
+    LTEXT           "Texture format:",IDC_STATIC,10,20,53,8
+    COMBOBOX        IDC_COMBO1,66,18,116,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Show statistics",IDC_CHECK2,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,190,4,63,10
+    COMBOBOX        IDC_COMBO6,266,18,76,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    
+    GROUPBOX        "DXVA2 and D3D11 video processor",IDC_STATIC1,10,40,172,90
+    LTEXT           "Use for:",IDC_STATIC2,16,54,28,8
+    CONTROL         "NV12",IDC_CHECK7,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,50,54,34,10
+    CONTROL         "P010/P016",IDC_CHECK8,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,90,54,48,10
+    CONTROL         "YUY2",IDC_CHECK9,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,145,54,34,10
+    CONTROL         "Other supported formats",IDC_CHECK4,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,50,68,96,10
+    CONTROL         "Double the frame rate when deinterlacing",IDC_CHECK3,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,82,152,10
+    CONTROL         "Use for resizing",IDC_CHECK5,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,96,63,10
+    LTEXT           "Request Super Resolution:",IDC_STATIC7,16,112,88,8
+    COMBOBOX        IDC_COMBO8,110,110,66,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "RTX Video HDR",IDC_CHECK19,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,126,70,10
+
+    GROUPBOX        "HDR Processing",IDC_STATIC,190,40,220,210
+    CONTROL         "Prefer Dolby Vision over PQ and HLG",IDC_CHECK18,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,196,54,140,10
+    LTEXT           "HDR10:",IDC_STATIC99,196,72,24,8
+    COMBOBOX        IDC_COMBO9,224,70,76,60,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    EDITTEXT        IDC_EDIT_DISPLAYMAX,304,70,30,12,ES_AUTOHSCROLL | ES_NUMBER,WS_EX_RIGHT
+    LTEXT           "Nits",IDC_STATIC100,338,72,12,8
+    
+    LTEXT           "Enhanced HDR:",IDC_STATIC101,196,90,60,8
+    LTEXT           "Dynamic Range:",IDC_STATIC102,196,106,70,8
+    CONTROL         "",IDC_SLIDER3,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,270,105,75,12
+    EDITTEXT        IDC_EDIT_DRC,350,105,25,12,ES_AUTOHSCROLL | ES_READONLY,WS_EX_RIGHT
+    
+    LTEXT           "Shadow Detail:",IDC_STATIC103,196,122,70,8
+    CONTROL         "",IDC_SLIDER4,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,270,121,75,12
+    EDITTEXT        IDC_EDIT_SHADOW,350,121,25,12,ES_AUTOHSCROLL | ES_READONLY,WS_EX_RIGHT
+    
+    LTEXT           "Color Volume:",IDC_STATIC104,196,138,70,8
+    CONTROL         "",IDC_SLIDER5,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,270,137,75,12
+    EDITTEXT        IDC_EDIT_COLORVOL,350,137,25,12,ES_AUTOHSCROLL | ES_READONLY,WS_EX_RIGHT
+    
+    LTEXT           "Scene Adapt:",IDC_STATIC105,196,154,70,8
+    CONTROL         "",IDC_SLIDER6,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,270,153,75,12
+    EDITTEXT        IDC_EDIT_SCENE,350,153,25,12,ES_AUTOHSCROLL | ES_READONLY,WS_EX_RIGHT
+
+    LTEXT           "HDR display toggle:",IDC_STATIC5,196,172,70,8
+    COMBOBOX        IDC_COMBO7,270,170,110,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "OSD brightness:",IDC_STATIC6,196,190,60,8
+    CONTROL         "",IDC_SLIDER1,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,260,189,75,12
+
+    GROUPBOX        "Shader video processor",IDC_STATIC,10,140,172,110
+    LTEXT           "Chroma upsampling:",IDC_STATIC,16,156,70,8
+    COMBOBOX        IDC_COMBO5,90,154,86,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Upscaling:",IDC_STATIC,16,174,36,8
+    COMBOBOX        IDC_COMBO2,56,172,120,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Downscaling:",IDC_STATIC,16,192,44,8
+    COMBOBOX        IDC_COMBO3,64,190,112,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Interpolate at 50% percent",IDC_CHECK6,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,208,120,10
+    CONTROL         "Use dithering",IDC_CHECK10,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,220,55,10
+    CONTROL         "Use Blend deinterlacing for YUV 4:2:0",IDC_CHECK17,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,234,152,10
+
+    GROUPBOX        "SDR/Display Settings",IDC_STATIC,10,260,400,60
+    CONTROL         "Convert to SDR",IDC_CHECK14,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,274,68,10
+    LTEXT           "SDR Display Nits:",IDC_STATIC8,90,274,58,8
+    CONTROL         "",IDC_SLIDER2,"msctls_trackbar32",TBS_BOTH | TBS_NOTICKS | WS_TABSTOP,152,273,100,12
+    EDITTEXT        IDC_EDIT1,256,273,30,12,ES_AUTOHSCROLL | ES_READONLY,WS_EX_RIGHT
+    LTEXT           "Swap effect:",IDC_STATIC3,16,296,42,8
+    COMBOBOX        IDC_COMBO4,62,294,80,30,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    GROUPBOX        "Advanced Options",IDC_STATIC,10,330,400,70
+    CONTROL         "Use exclusive fullscreen",IDC_CHECK11,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,344,93,10
+    CONTROL         "VBlank before presentation",IDC_CHECK15,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,120,344,105,10
+    CONTROL         "Adjust the frame presentation time",IDC_CHECK13,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,240,344,133,10
+    CONTROL         "Reinitialize device when changing display",IDC_CHECK16,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,16,358,151,10
+
+    PUSHBUTTON      "Default",IDC_BUTTON1,365,418,37,14
+    EDITTEXT        IDC_EDIT2,10,418,350,12,ES_READONLY | NOT WS_BORDER,WS_EX_RIGHT
+END
+
+IDD_INFOPROPPAGE DIALOGEX 0, 0, 318, 153
+STYLE DS_SETFONT | DS_FIXEDSYS | WS_CHILD
+FONT 8, "MS Shell Dlg", 400, 0, 0x0
+BEGIN
+    EDITTEXT        IDC_EDIT1,5,4,308,130,ES_MULTILINE | ES_AUTOVSCROLL | ES_AUTOHSCROLL | ES_READONLY | WS_VSCROLL | WS_HSCROLL
+    EDITTEXT        IDC_EDIT2,5,140,308,12,ES_READONLY | NOT WS_BORDER,WS_EX_RIGHT
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// AFX_DIALOG_LAYOUT
+//
+
+IDD_MAINPROPPAGE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+IDD_INFOPROPPAGE AFX_DIALOG_LAYOUT
+BEGIN
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_MAINPROPPAGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 5
+        RIGHTMARGIN, 415
+        VERTGUIDE, 10
+        VERTGUIDE, 182
+        VERTGUIDE, 190
+        VERTGUIDE, 410
+        TOPMARGIN, 4
+        BOTTOMMARGIN, 445
+    END
+
+    IDD_INFOPROPPAGE, DIALOG
+    BEGIN
+        LEFTMARGIN, 5
+        RIGHTMARGIN, 313
+        TOPMARGIN, 4
+        BOTTOMMARGIN, 152
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog Info
+//
+
+IDD_MAINPROPPAGE DLGINIT
+BEGIN
+    IDC_COMBO9, 0x403, 7, 0
+0x6749, 0x6f6e, 0x6572, "\000" 
+    IDC_COMBO9, 0x403, 23, 0
+0x6150, 0x7373, 0x6874, 0x6f72, 0x6775, 0x2068, 0x6f74, 0x6420, 0x7369, 0x6c70, 0x7961, "\000" 
+    IDC_COMBO9, 0x403, 19, 0
+0x6f4c, 0x6163, 0x3a6c, 0x4120, 0x4345, 0x2053, 0x6e45, 0x6168, 0x636e, 0x6465, "\000" 
+    IDC_COMBO9, 0x403, 16, 0
+0x6f4c, 0x6163, 0x3a6c, 0x5220, 0x6965, 0x686e, 0x7261, 0x0064, 
+    IDC_COMBO9, 0x403, 13, 0
+0x6f4c, 0x6163, 0x3a6c, 0x4820, 0x6261, 0x656c, "\000" 
+    IDC_COMBO9, 0x403, 14, 0
+0x6f4c, 0x6163, 0x3a6c, 0x4d20, 0x626f, 0x7569, 0x0073, 
+    0
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_MAINPROPPAGE_TITLE  "Settings"
+    IDS_INFOPROPPAGE_TITLE  "Information"
+    IDS_TT_USE_D3D11        "Enable DirectX 11 rendering instead of DirectX 9"
+    IDS_TT_TEXTURE_FORMAT   "Internal texture format for video processing"
+    IDS_TT_SHOW_STATS       "Display rendering statistics overlay"
+    IDS_TT_HDR_PASSTHROUGH  "Pass HDR content directly to display without tone mapping"
+    IDS_TT_HDR_TONE_MAPPING "Convert HDR content using local tone mapping algorithms"
+    IDS_TT_HDR_DISPLAY_NITS "Maximum brightness of your HDR display in nits"
+    IDS_TT_DYNAMIC_RANGE    "Adjust dynamic range compression for HDR content"
+    IDS_TT_SHADOW_DETAIL    "Enhance detail visibility in dark areas"
+    IDS_TT_COLOR_VOLUME     "Adapt color volume mapping for better color reproduction"
+    IDS_TT_SCENE_ADAPT      "Enable scene-based adaptation for better HDR rendering"
+    IDS_TT_CONVERT_SDR      "Convert HDR content to SDR for non-HDR displays"
+    IDS_TT_SDR_NITS         "Brightness of your SDR display in nits"
+    IDS_TT_USE_DITHERING    "Apply dithering to reduce color banding"
+    IDS_TT_EXCLUSIVE_FS     "Use exclusive fullscreen mode for better performance"
+    IDS_TT_VBLANK           "Wait for vertical blank before presenting frames"
+    IDS_TT_FRAME_TIME       "Adjust frame presentation timing"
+    IDS_TT_REINIT_DISPLAY   "Reinitialize renderer when display configuration changes"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+#include "res\MpcVideoRenderer.rc2"
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
