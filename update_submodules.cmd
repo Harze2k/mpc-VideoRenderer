@@ -15,13 +15,14 @@ IF NOT EXIST %gitexe% (
 
 :GitOK
 
-%gitexe% submodule update --init --recursive --progress
+%gitexe% submodule update --init --progress
 IF %ERRORLEVEL%==0 (
    ECHO Submodule update completed successfully.
 ) ELSE (
-   ECHO ERROR: %errorlevel%!
+   GOTO :END
 )
-:END
+
+:GitOK
 TIMEOUT /T 3
 ENDLOCAL
 EXIT /B
