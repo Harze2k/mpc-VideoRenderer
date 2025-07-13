@@ -22,7 +22,7 @@
 #pragma once
 
 //#include "CoordGeom.h"
-
+#include <afxwin.h> 
 enum SUBTITLE_TYPE {
 	ST_TEXT,
 	ST_VOBSUB,
