@@ -25,6 +25,16 @@
 #include "FrameStats.h"
 #include "SubPic/ISubPic.h"
 
+#include <afxwin.h>
+
+class VideoProcessor {
+	CRect m_srcRect;
+	CRect m_videoRect;
+	CRect m_windowRect;
+	CRect m_renderRect;
+	void SetRects(const CRect& sourceRect, const CRect& videoRect);
+};
+
 enum : int {
 	VP_DX9 = 9,
 	VP_DX11 = 11
@@ -35,12 +45,11 @@ enum : int {
 	STEREO3D_HalfOverUnder_to_Interlace,
 };
 
-class CMpcVideoRenderer;
-
-class CVideoProcessor
-	: public IMFVideoProcessor
-	, public IMFVideoMixerBitmap
-{
+class CMpcVideoRenderer {};
+class CVideoProcessor {
+	public IMFVideoProcessor;
+	public IMFVideoMixerBitmap;
+};
 protected:
 	long m_nRefCount = 1;
 	CMpcVideoRenderer* m_pFilter = nullptr;

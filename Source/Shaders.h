@@ -36,7 +36,7 @@ struct PS_DOVI_POLY_CURVE {
 
 #define PS_RESHAPE_POLY 1
 #define PS_RESHAPE_MMR  2
-
+#include <d3d11.h>
 struct PS_DOVI_CURVE {
 	DirectX::XMFLOAT4 pivots_data[7];
 	DirectX::XMFLOAT4 coeffs_data[8];
