@@ -46,9 +46,8 @@ enum : int {
 };
 
 class CMpcVideoRenderer {};
-class CVideoProcessor {
-	public IMFVideoProcessor;
-	public IMFVideoMixerBitmap;
+class CVideoProcessor : public IMFVideoProcessor, public IMFVideoMixerBitmap {
+	// ...
 };
 protected:
 	long m_nRefCount = 1;
