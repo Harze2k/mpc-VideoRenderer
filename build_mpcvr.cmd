@@ -173,16 +173,16 @@ FOR %%G IN (7za.exe) DO (SET "SEVENZIP_PATH=%%~$PATH:G")
 IF EXIST "%SEVENZIP_PATH%" (SET "SEVENZIP=%SEVENZIP_PATH%" & EXIT /B)
 
 FOR /F "tokens=2*" %%A IN (
-  'REG QUERY "HKLM\SOFTWARE\7-Zip" /v "Path" 2^>NUL ^| FIND "REG_SZ" ^|^|
-   REG QUERY "HKLM\SOFTWARE\Wow6432Node\7-Zip" /v "Path" 2^>NUL ^| FIND "REG_SZ"') DO SET "SEVENZIP=%%B\7z.exe"
+  REG QUERY "HKLM\SOFTWARE\7-Zip" /v "Path" 2^>NUL ^| FIND "REG_SZ" ^|^|
+  REG QUERY "HKLM\SOFTWARE\Wow6432Node\7-Zip" /v "Path" 2^>NUL ^| FIND "REG_SZ"') DO SET "SEVENZIP=%%B\7z.exe"
 EXIT /B
 
 :SubCompiling
 TITLE Compiling %TITLE% - %BUILDCFG%^|%1...
 MSBuild.exe %PROJECT%.sln %MSBUILD_SWITCHES%^
- /target:%BUILDTYPE% /p:Configuration="%BUILDCFG%" /p:Platform=%1^
- /flp1:LogFile=%LOG_DIR%\errors_%BUILDCFG%_%1.log;errorsonly;Verbosity=diagnostic^
- /flp2:LogFile=%LOG_DIR%\warnings_%BUILDCFG%_%1.log;warningsonly;Verbosity=diagnostic
+  /target:%BUILDTYPE% /p:Configuration="%BUILDCFG%" /p:Platform=%1^
+  /flp1:LogFile=%LOG_DIR%\errors_%BUILDCFG%_%1.log;errorsonly;Verbosity=diagnostic^
+  /flp2:LogFile=%LOG_DIR%\warnings_%BUILDCFG%_%1.log;warningsonly;Verbosity=diagnostic
 IF %ERRORLEVEL% NEQ 0 (
   CALL :SubMsg "ERROR" "%PROJECT%.sln %BUILDCFG% %1 - Compilation failed!"
   EXIT /B %ERRORLEVEL%
