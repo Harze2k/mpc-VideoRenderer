@@ -283,9 +283,9 @@ SET "EXEC_NAME_UPPER="
 REM Use the ToUpper helper function to convert PROJECT name to uppercase.
 CALL :ToUpper "%PROJECT%" EXEC_NAME_UPPER
 REM Print a colored message indicating the build target with decorative borders.
-CALL :SubColorText "0B" "=========================================================================="
-CALL :SubColorText "0B" "=== BUILDING %EXEC_NAME_UPPER% (%BUILDCFG%/%1) ==="
-CALL :SubColorText "0B" "=========================================================================="
+CALL :SubMsg "INFO"  "=========================================================================="
+CALL :SubMsg "INFO" "=== BUILDING %EXEC_NAME_UPPER% (%BUILDCFG%/%1) ==="
+CALL :SubMsg "INFO" "=========================================================================="
 ECHO.
 
 TITLE Compiling %TITLE% - %BUILDCFG%^|%1...
