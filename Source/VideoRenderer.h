@@ -139,7 +139,10 @@ private:
 public:
 	CMpcVideoRenderer(LPUNKNOWN pUnk, HRESULT* phr);
 	~CMpcVideoRenderer();
-
+	
+	// New method to trigger a pipeline rebuild
+    void TriggerMediaTypeChange();
+	
 	void NewSegment(REFERENCE_TIME startTime);
 	long CalcImageSize(CMediaType& mt, bool redefine_mt);
 

@@ -1746,6 +1746,20 @@ void CMpcVideoRenderer::DoAfterChangingDevice()
 	}
 }
 
+void CMpcVideoRenderer::TriggerMediaTypeChange()
+{
+	if (m_pInputPin && m_pInputPin->IsConnected() == TRUE && m_pSink) {
+		DLog(L"CMpcVideoRenderer::TriggerMediaTypeChange() - Mismatch detected, forcing reconnect.");
+		m_bValidBuffer = false;
+		auto pPin = (IPin*)m_pInputPin;
+		m_pInputPin->AddRef();
+		EXECUTE_ASSERT(S_OK == m_pSink->Notify(EC_DISPLAY_CHANGED, (LONG_PTR)pPin, 0));
+		SetAbortSignal(TRUE);
+		SAFE_RELEASE(m_pMediaSample);
+		m_pInputPin->Release();
+	}
+}
+
 LRESULT CMpcVideoRenderer::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
 	if (m_hWndDrain && !InSendMessage() && !m_bIsFullscreen) {

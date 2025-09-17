@@ -405,6 +405,7 @@ CDX11VideoProcessor::CDX11VideoProcessor(CMpcVideoRenderer* pFilter, const Setti
 	m_iSDRDisplayNits      = config.iSDRDisplayNits;
 	m_bVPRTXVideoHDR       = config.bVPRTXVideoHDR;
 	m_iVPSuperRes          = config.iVPSuperRes;
+	m_activeHdrMode = HdrMode::UNKNOWN;
 
 	m_nCurrentAdapter = -1;
 
@@ -1624,6 +1625,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 	}
 
 	ReleaseVP();
+	m_activeHdrMode = HdrMode::UNKNOWN; // Reset on every init
 
 	auto FmtParams = GetFmtConvParams(pmt);
 
@@ -1835,6 +1837,10 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 		UpdateStatsStatic();
 
 		m_pFilter->m_inputMT = *pmt;
+
+		const auto bHdrOutput = m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping) && (SourceIsHDR() || m_bVPUseRTXVideoHDR);
+		m_activeHdrMode = bHdrOutput ? HdrMode::HDR : HdrMode::SDR;
+		DLog(L"CDX11VideoProcessor::InitMediaType() - Pipeline configured for: %s", (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"));
 
 		return TRUE;
 	}
@@ -2112,6 +2118,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
 	bool updateStats = false;
 
 	m_hdr10 = {};
+	m_Dovi.bValid = false; // Ensure DoVi is reset for every sample initially
 
 	if (CComQIPtr<IMediaSideData> pMediaSideData = pSample) {
 		if (SourceIsPQorHLG() && (m_bHdrPassthrough || m_bHdrLocalToneMapping)) {
@@ -2264,6 +2271,23 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
 			}
 		}
 	}
+	
+	// ---- START OF NEW LOGIC ----
+    if (m_activeHdrMode != HdrMode::UNKNOWN)
+    {
+        HdrMode detectedMode = (m_hdr10.bValid || m_Dovi.bValid) ? HdrMode::HDR : HdrMode::SDR;
+        if (m_activeHdrMode != detectedMode)
+        {
+            DLog(L"CDX11VideoProcessor::CopySample() - Mismatch! Pipeline is %s but content is %s. Triggering re-init.",
+                (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"),
+                (detectedMode == HdrMode::HDR ? L"HDR" : L"SDR"));
+
+            // Set to UNKNOWN to prevent triggering on every subsequent frame before re-init completes.
+            m_activeHdrMode = HdrMode::UNKNOWN;
+            m_pFilter->TriggerMediaTypeChange();
+            return E_ABORT; // Abort processing this frame, the pipeline will be rebuilt.
+        }
+    }
 
 	if (CComQIPtr<IMediaSampleD3D11> pMSD3D11 = pSample) {
 		if (m_iSrcFromGPU != 11) {
@@ -3083,10 +3107,9 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D* pRenderTarget, const CRect
 			StepSetting();
 			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSCorrection, m_pCorrectionConstants, 0, false);
 		}
-		
 		// Only apply HDR10 tone mapping if the shader exists AND we have received valid HDR metadata for the current frame.
 		// Otherwise, the m_pPSCorrection shader (if present) will handle the conversion from PQ to SDR.
-		if (m_pPSHDR10ToneMapping && m_hdr10.bValid) {
+		if (m_pPSHDR10ToneMapping && (m_hdr10.bValid || m_Dovi.bValid)) {
 			StepSetting();
 			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSHDR10ToneMapping, m_pHDR10ToneMappingConstants, 0, false);
 		} else {

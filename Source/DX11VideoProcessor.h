@@ -35,6 +35,8 @@
 
 #define TEST_SHADER 0
 
+enum class HdrMode { UNKNOWN, SDR, HDR };
+
 class CVideoRendererInputPin;
 
 class CDX11VideoProcessor
