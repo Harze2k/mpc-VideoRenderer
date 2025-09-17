@@ -39,11 +39,11 @@
   </ImportGroup>
   <ItemDefinitionGroup>
     <ClCompile>
+      <!-- This NOMINMAX definition is correct and prevents compiler errors -->
       <PreprocessorDefinitions>NOMINMAX;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>streams.h</PrecompiledHeaderFile>
-      <!-- FIX: Change Debug Information Format to C7 compatible (/Z7) to resolve LNK4020 warnings -->
-      <DebugInformationFormat>OldStyle</DebugInformationFormat>
+      <!-- The DebugInformationFormat line has been REMOVED to fix the LNK1103 fatal error -->
     </ClCompile>
     <Lib>
       <AdditionalDependencies>strmiids.lib</AdditionalDependencies>
