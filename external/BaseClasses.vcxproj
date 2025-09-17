@@ -37,12 +37,10 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(SolutionDir)\common.props" />
   </ImportGroup>
-  <PropertyGroup Label="UserMacros">
-    <NOMINMAX>False</NOMINMAX>
-  </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
-      <PreprocessorDefinitions>_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!-- FIX: Added NOMINMAX to prevent conflicts with the Windows.h min/max macros -->
+      <PreprocessorDefinitions>NOMINMAX;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <PrecompiledHeaderFile>streams.h</PrecompiledHeaderFile>
     </ClCompile>
