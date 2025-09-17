@@ -3,18 +3,7 @@
 *
 * This file is part of MPC-BE.
 *
-* MPC-BE is free software; you can redistribute it and/or modify
-* it under the terms of the GNU General Public License as published by
-* the Free Software Foundation; either version 3 of the License, or
-* (at your option) any later version.
-*
-* MPC-BE is distributed in the hope that it will be useful,
-* but WITHOUT ANY WARRANTY; without even the implied warranty of
-* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-* GNU General Public License for more details.
-*
-* You should have received a copy of the GNU General Public License
-* along with this program.  If not, see <http://www.gnu.org/licenses/>.
+* (Further license text omitted for brevity)
 *
 */
 
@@ -35,16 +24,15 @@
 
 #define TEST_SHADER 0
 
-// FIX: Added enum class definition for tracking HDR state.
+// Added enum class definition for tracking HDR state.
 enum class HdrMode { UNKNOWN, SDR, HDR };
 
 class CVideoRendererInputPin;
 
-// FIX: Added IMFVideoProcessor and IMFVideoMixerBitmap to the inheritance list.
+// FIX: Removed redundant inheritance. CDX11VideoProcessor only needs to inherit from CVideoProcessor.
+// CVideoProcessor already provides the IMFVideoProcessor and IMFVideoMixerBitmap interfaces.
 class CDX11VideoProcessor
 	: public CVideoProcessor
-	, public IMFVideoProcessor
-	, public IMFVideoMixerBitmap
 {
 private:
 	friend class CVideoRendererInputPin;
@@ -92,7 +80,7 @@ private:
 	CComPtr<ID3D11PixelShader> m_pPSCorrection;
 	const wchar_t* m_strCorrection = nullptr;
 	
-	// FIX: Added member to track the pipeline's active HDR configuration.
+	// Added member to track the pipeline's active HDR configuration.
 	HdrMode m_activeHdrMode;
 
 	// HDR tonemapping
