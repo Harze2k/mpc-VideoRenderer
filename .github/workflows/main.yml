@@ -33,7 +33,7 @@ jobs:
         uses: actions/cache@v4
         with:
           # This path should point to your intermediate build output folders.
-          path: .vs/
+          path: _bin/obj # <-- This is the correct path for your intermediate build files
           # The cache key invalidates when the solution or any project file changes.
           key: ${{ runner.os }}-msbuild-${{ hashFiles('**/*.sln', '**/*.vcxproj') }}
           restore-keys: |
