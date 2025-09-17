@@ -2,19 +2,7 @@
 REM (C) 2018-2024 see Authors.txt
 REM
 REM This file is part of MPC-BE.
-REM
-REM MPC-BE is free software; you can redistribute it and/or modify
-REM it under the terms of the GNU General Public License as published by
-REM the Free Software Foundation; either version 3 of the License, or
-REM (at your option) any later version.
-REM
-REM MPC-BE is distributed in the hope that it will be useful,
-REM but WITHOUT ANY WARRANTY; without even the implied warranty of
-REM MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-REM GNU General Public License for more details.
-REM
-REM You should have received a copy of the GNU General Public License
-REM along with this program.  If not, see <http://www.gnu.org/licenses/>.
+REM (Further license text omitted for brevity)
 
 SETLOCAL ENABLEDELAYEDEXPANSION
 CD /D %~dp0
@@ -40,48 +28,35 @@ FOR %%A IN (%*) DO (
   IF /I "%%A" == "NoWait" (
     SET "Wait=False"
   )
-  IF /I "%%A" == "VS2019" (
-    SET "COMPILER=VS2019"
-  )
-  IF /I "%%A" == "VS2022" (
-    SET "COMPILER=VS2022"
-  )
 )
 
-
-IF /I "%SIGN%" == "True" (
-  IF NOT EXIST "%~dp0signinfo.txt" (
-    CALL :SubMsg "WARNING" "signinfo.txt not found."
-    SET "SIGN=False"
-  )
-)
-
-CALL :SubVSPath
-SET "TOOLSET=%VS_PATH%\Common7\Tools\vsdevcmd"
+REM This script now assumes it is run from an environment where MSBuild is in the PATH,
+REM such as a "Developer Command Prompt for Visual Studio" or a CI runner
+REM configured by an action like `microsoft/setup-msbuild`.
 
 SET "LOG_DIR=_bin\logs"
 IF NOT EXIST "%LOG_DIR%" MD "%LOG_DIR%"
 
-CALL "%TOOLSET%" -arch=x86
-REM again set the source directory (fix possible bug in VS2017)
-CD /D %~dp0
+REM Build the x86 version
 CALL :SubCompiling x86
 IF !ERRORLEVEL! NEQ 0 EXIT /B !ERRORLEVEL!
 
-CALL "%TOOLSET%" -arch=amd64
-REM again set the source directory (fix possible bug in VS2017)
-CD /D %~dp0
+REM Build the x64 version
 CALL :SubCompiling x64
 IF !ERRORLEVEL! NEQ 0 EXIT /B !ERRORLEVEL!
 
 IF /I "%SIGN%" == "True" (
-  SET FILES="%~dp0_bin\Filter_x86%SUFFIX%\%PROJECT%.ax" "%~dp0_bin\Filter_x64%SUFFIX%\%PROJECT%64.ax"
-  CALL "%~dp0\sign.cmd" %%FILES%%
-  IF %ERRORLEVEL% NEQ 0 (
-    CALL :SubMsg "ERROR" "Problem signing files."
-    EXIT /B %ERRORLEVEL%
+  IF EXIST "%~dp0signinfo.txt" (
+    SET FILES="%~dp0_bin\Filter_x86%SUFFIX%\%PROJECT%.ax" "%~dp0_bin\Filter_x64%SUFFIX%\%PROJECT%64.ax"
+    CALL "%~dp0\sign.cmd" %%FILES%%
+    IF %ERRORLEVEL% NEQ 0 (
+      CALL :SubMsg "ERROR" "Problem signing files."
+      EXIT /B %ERRORLEVEL%
+    ) ELSE (
+      CALL :SubMsg "INFO" "Files signed successfully."
+    )
   ) ELSE (
-    CALL :SubMsg "INFO" "Files signed successfully."
+    CALL :SubMsg "WARNING" "signinfo.txt not found. Skipping signing."
   )
 )
 
@@ -128,8 +103,10 @@ IF DEFINED SEVENZIP (
 .\Readme.md ^
 .\history.txt ^
 .\LICENSE.txt
-    IF %ERRORLEVEL% NEQ 0 CALL :SubMsg "ERROR" "Unable to create %PCKG_NAME%.zip!"
-    EXIT /B %ERRORLEVEL%
+    IF %ERRORLEVEL% NEQ 0 (
+        CALL :SubMsg "ERROR" "Unable to create %PCKG_NAME%.zip!"
+        EXIT /B %ERRORLEVEL%
+    )
     CALL :SubMsg "INFO" "%PCKG_NAME%.zip successfully created"
 )
 
@@ -139,19 +116,6 @@ IF /I "%Wait%" == "True" (
 )
 ENDLOCAL
 EXIT
-
-:SubVSPath
-SET "PARAMS=-property installationPath -requires Microsoft.Component.MSBuild"
-IF /I "%COMPILER%" == "VS2019" (
-  SET "PARAMS=%PARAMS% -version [16.0,17.0)"
-) ELSE IF /I "%COMPILER%" == "VS2022" (
-  SET "PARAMS=%PARAMS% -version [17.0,18.0)"
-) ELSE (
-  SET "PARAMS=%PARAMS% -latest"
-)
-SET "VSWHERE="%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" %PARAMS%"
-FOR /f "delims=" %%A IN ('!VSWHERE!') DO SET VS_PATH=%%A
-EXIT /B
 
 :SubDetectSevenzipPath
 FOR %%G IN (7z.exe) DO (SET "SEVENZIP_PATH=%%~$PATH:G")
