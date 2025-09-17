@@ -3084,9 +3084,13 @@ HRESULT CDX11VideoProcessor::Process(ID3D11Texture2D* pRenderTarget, const CRect
 			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSCorrection, m_pCorrectionConstants, 0, false);
 		}
 		
-		if (m_pPSHDR10ToneMapping) {
+		// Only apply HDR10 tone mapping if the shader exists AND we have received valid HDR metadata for the current frame.
+		// Otherwise, the m_pPSCorrection shader (if present) will handle the conversion from PQ to SDR.
+		if (m_pPSHDR10ToneMapping && m_hdr10.bValid) {
 			StepSetting();
 			hr = TextureCopyRect(*pInputTexture, pRT, rect, rect, m_pPSHDR10ToneMapping, m_pHDR10ToneMappingConstants, 0, false);
+		} else {
+			// This space intentionally left blank. If there's no metadata, we rely on the correction shader pass.
 		}
 		
 		if (m_pPostScaleShaders.size()) {
