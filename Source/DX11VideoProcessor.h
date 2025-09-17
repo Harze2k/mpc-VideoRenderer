@@ -35,12 +35,16 @@
 
 #define TEST_SHADER 0
 
+// FIX: Added enum class definition for tracking HDR state.
 enum class HdrMode { UNKNOWN, SDR, HDR };
 
 class CVideoRendererInputPin;
 
+// FIX: Added IMFVideoProcessor and IMFVideoMixerBitmap to the inheritance list.
 class CDX11VideoProcessor
 	: public CVideoProcessor
+	, public IMFVideoProcessor
+	, public IMFVideoMixerBitmap
 {
 private:
 	friend class CVideoRendererInputPin;
@@ -87,6 +91,9 @@ private:
 	CComPtr<ID3D11Buffer> m_pCorrectionConstants;
 	CComPtr<ID3D11PixelShader> m_pPSCorrection;
 	const wchar_t* m_strCorrection = nullptr;
+	
+	// FIX: Added member to track the pipeline's active HDR configuration.
+	HdrMode m_activeHdrMode;
 
 	// HDR tonemapping
 	CComPtr<ID3D11Buffer> m_pHDR10ToneMappingConstants;
