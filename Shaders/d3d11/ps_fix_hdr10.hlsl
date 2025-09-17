@@ -63,18 +63,20 @@ float4 main(PS_INPUT input) : SV_Target {
     float4 color = tex.Sample(samp, input.Tex);
     color = ST2084ToLinear(color, 10000.0f); // Convert PQ to Linear space
 
-    float effectiveMaxLum = min(MasteringMaxLuminanceNits, maxCLL);
-    float fallAdjustment = min(MasteringMaxLuminanceNits / maxFALL, 1.0);
-
-    if (displayMaxNits > MasteringMaxLuminanceNits) {
-        effectiveMaxLum = min(displayMaxNits, maxCLL);
-        fallAdjustment = min(displayMaxNits / maxFALL, 1.0);
+    // Determine the effective peak luminance of the content for normalization.
+    // Use maxCLL if it is valid (greater than 0) and reasonably within the mastering display's peak.
+    // Otherwise, fall back to the mastering display's peak luminance. This avoids issues with missing
+    // or incorrect maxCLL metadata.
+    float effectiveMaxLum = MasteringMaxLuminanceNits;
+    if (maxCLL > 0.0 && maxCLL <= MasteringMaxLuminanceNits) {
+        effectiveMaxLum = maxCLL;
     }
     
     // Apply global normalization **before tone mapping**
+    // This scales the incoming linear light values so that the peak brightness
+    // of the content corresponds to a value of 1.0 before entering the tone mapper.
     color.rgb *= (1.0f / effectiveMaxLum);
     color.rgb = saturate(color.rgb);
-    color.rgb *= fallAdjustment;
 
     // Select the tone mapping function based on `selection`
     if (selection == 1) {
@@ -93,8 +95,11 @@ float4 main(PS_INPUT input) : SV_Target {
         color.rgb = ACESFilmTonemap(color.rgb);  // Default fallback to ACES
     }
 
-    // Scale to display peak brightness after tone mapping
-    color.rgb *= displayMaxNits;
+    // Scale to display peak brightness after tone mapping (skip for Möbius as it scales internally)
+    // The tonemapper outputs a normalized value (0-1), so we scale it to the target display's peak brightness.
+    if (selection != 4) {
+        color.rgb *= displayMaxNits;
+    }
 
     // Convert back from linear to PQ color space
     color = LinearToST2084(color, 10000.0f);  // Convert Linear to PQ
