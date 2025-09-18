@@ -250,7 +250,7 @@ HRESULT CVRMainPPage::OnActivate()
 {
     // set m_hWnd for CWindow
     m_hWnd = m_hwnd;
-    
+
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
@@ -278,7 +278,7 @@ HRESULT CVRMainPPage::OnActivate()
         GetDlgItem(IDC_COMBO8).EnableWindow(FALSE);
         GetDlgItem(IDC_CHECK19).EnableWindow(FALSE);
     }
-    
+
     EnableControls();
 
     SendDlgItemMessageW(IDC_COMBO6, CB_ADDSTRING, 0, (LPARAM)L"Fixed font size");
@@ -332,7 +332,7 @@ HRESULT CVRMainPPage::OnActivate()
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPAGESIZE, 0, 5); // clicks on trackbar's channel
 
     SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
-    
+
     SetControls();
 
     SetCursor(m_hWnd, IDC_ARROW);
@@ -577,16 +577,21 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 AutoSwapLog(L"PropPage: user changed HDR combo, idx=%ld",
                             (long)SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0));
                 lValue = ComboBox_GetCurItemData(m_hWnd, IDC_COMBO9); // Use item data instead of index
-                
-                if (lValue == -1) {
+
+                if (lValue == -1)
+                {
                     // "Ignore" option
                     m_SetsPP.bHdrPassthrough = false;
                     m_SetsPP.bHdrLocalToneMapping = false;
-                } else if (lValue == 0) {
+                }
+                else if (lValue == 0)
+                {
                     // "Passthrough" option  
                     m_SetsPP.bHdrPassthrough = true;
                     m_SetsPP.bHdrLocalToneMapping = false;
-                } else {
+                }
+                else
+                {
                     // Local tone mapping options (1-5)
                     m_SetsPP.bHdrPassthrough = false;
                     m_SetsPP.bHdrLocalToneMapping = true;
