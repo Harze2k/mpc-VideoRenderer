@@ -17,7 +17,7 @@ cbuffer HDR10ParamsCB : register(b0)
     float MaxCLL;
     float MaxFALL;
     float DisplayMaxNits;
-    UINT  Selection;   // note: UINT (integer)
+    unit  Selection;   // note: UINT (integer)
     float Reserved1;
     float Reserved2;
 }
