@@ -30,7 +30,6 @@ WM_MVR_HDR_AUTOSWAP_UI
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  *
  */
-
 #include "stdafx.h"
 #include "VideoRenderer.h"
 #include "AutoSwapLog.h"
@@ -38,17 +37,14 @@ WM_MVR_HDR_AUTOSWAP_UI
 #include "Helper.h"
 #include "DisplayConfig.h"
 #include "PropPage.h"
-
 void SetCursor(HWND hWnd, LPCWSTR lpCursorName)
 {
     SetClassLongPtrW(hWnd, GCLP_HCURSOR, (LONG_PTR)::LoadCursorW(nullptr, lpCursorName));
 }
-
 void SetCursor(HWND hWnd, UINT nID, LPCWSTR lpCursorName)
 {
     SetCursor(::GetDlgItem(hWnd, nID), lpCursorName);
 }
-
 inline void ComboBox_AddStringData(HWND hWnd, int nIDComboBox, LPCWSTR str, LONG_PTR data)
 {
     LRESULT lValue = SendDlgItemMessageW(hWnd, nIDComboBox, CB_ADDSTRING, 0, (LPARAM)str);
@@ -57,7 +53,6 @@ inline void ComboBox_AddStringData(HWND hWnd, int nIDComboBox, LPCWSTR str, LONG
         SendDlgItemMessageW(hWnd, nIDComboBox, CB_SETITEMDATA, lValue, data);
     }
 }
-
 inline LONG_PTR ComboBox_GetCurItemData(HWND hWnd, int nIDComboBox)
 {
     LRESULT lValue = SendDlgItemMessageW(hWnd, nIDComboBox, CB_GETCURSEL, 0, 0);
@@ -67,7 +62,6 @@ inline LONG_PTR ComboBox_GetCurItemData(HWND hWnd, int nIDComboBox)
     }
     return lValue;
 }
-
 void ComboBox_SelectByItemData(HWND hWnd, int nIDComboBox, LONG_PTR data)
 {
     LRESULT lCount = SendDlgItemMessageW(hWnd, nIDComboBox, CB_GETCOUNT, 0, 0);
@@ -84,32 +78,23 @@ void ComboBox_SelectByItemData(HWND hWnd, int nIDComboBox, LONG_PTR data)
         }
     }
 }
-
-
 static UINT WM_MVR_HDR_AUTOSWAP_UI = RegisterWindowMessageW(L"MVR_HDR_AUTOSWAP_UI");
-
 // CVRMainPPage
-
 // https://msdn.microsoft.com/ru-ru/library/windows/desktop/dd375010(v=vs.85).aspx
-
 CVRMainPPage::CVRMainPPage(LPUNKNOWN lpunk, HRESULT* phr) :
     CBasePropertyPage(L"MainProp", lpunk, IDD_MAINPROPPAGE, IDS_MAINPROPPAGE_TITLE)
 {
     DLog(L"CVRMainPPage()");
 }
-
 CVRMainPPage::~CVRMainPPage()
 {
     DLog(L"~CVRMainPPage()");
 }
-
 void CVRMainPPage::SetControls()
 {
     CheckDlgButton(IDC_CHECK1, m_SetsPP.bUseD3D11 ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK2, m_SetsPP.bShowStats ? BST_CHECKED : BST_UNCHECKED);
-
     ComboBox_SelectByItemData(m_hWnd, IDC_COMBO1, m_SetsPP.iTexFormat);
-
     CheckDlgButton(IDC_CHECK7, m_SetsPP.VPFmts.bNV12 ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK8, m_SetsPP.VPFmts.bP01x ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK9, m_SetsPP.VPFmts.bYUY2 ? BST_CHECKED : BST_UNCHECKED);
@@ -118,7 +103,6 @@ void CVRMainPPage::SetControls()
     CheckDlgButton(IDC_CHECK5, m_SetsPP.bVPScaling ? BST_CHECKED : BST_UNCHECKED);
     SendDlgItemMessageW(IDC_COMBO8, CB_SETCURSEL, m_SetsPP.iVPSuperRes, 0);
     CheckDlgButton(IDC_CHECK19, m_SetsPP.bVPRTXVideoHDR ? BST_CHECKED : BST_UNCHECKED);
-
     if (!m_SetsPP.bHdrPassthrough && !m_SetsPP.bHdrLocalToneMapping)
     {
         ComboBox_SelectByItemData(m_hWnd, IDC_COMBO9, -1); // "Ignore"
@@ -132,32 +116,24 @@ void CVRMainPPage::SetControls()
         ComboBox_SelectByItemData(m_hWnd, IDC_COMBO9, m_SetsPP.iHdrLocalToneMappingType);
         // Local tone mapping types 1-5
     }
-
     CheckDlgButton(IDC_CHECK18, m_SetsPP.bHdrPreferDoVi ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK14, m_SetsPP.bConvertToSdr ? BST_CHECKED : BST_UNCHECKED);
-
     SendDlgItemMessageW(IDC_COMBO7, CB_SETCURSEL, m_SetsPP.iHdrToggleDisplay, 0);
     SendDlgItemMessageW(IDC_SLIDER1, TBM_SETPOS, 1, m_SetsPP.iHdrOsdBrightness);
-
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPOS, 1, m_SetsPP.iSDRDisplayNits / SDR_NITS_STEP);
     GetDlgItem(IDC_EDIT1).SetWindowTextW(std::to_wstring(m_SetsPP.iSDRDisplayNits).c_str());
-
     CheckDlgButton(IDC_CHECK6, m_SetsPP.bInterpolateAt50pct ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK10, m_SetsPP.bUseDither ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK17, m_SetsPP.bDeintBlend ? BST_CHECKED : BST_UNCHECKED);
-
     CheckDlgButton(IDC_CHECK11, m_SetsPP.bExclusiveFS ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK15, m_SetsPP.bVBlankBeforePresent ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK13, m_SetsPP.bAdjustPresentTime ? BST_CHECKED : BST_UNCHECKED);
     CheckDlgButton(IDC_CHECK16, m_SetsPP.bReinitByDisplay ? BST_CHECKED : BST_UNCHECKED);
-
     SendDlgItemMessageW(IDC_COMBO6, CB_SETCURSEL, m_SetsPP.iResizeStats, 0);
-
     SendDlgItemMessageW(IDC_COMBO5, CB_SETCURSEL, m_SetsPP.iChromaScaling, 0);
     SendDlgItemMessageW(IDC_COMBO2, CB_SETCURSEL, m_SetsPP.iUpscaling, 0);
     SendDlgItemMessageW(IDC_COMBO3, CB_SETCURSEL, m_SetsPP.iDownscaling, 0);
     SendDlgItemMessageW(IDC_COMBO4, CB_SETCURSEL, m_SetsPP.iSwapEffect, 0);
-
     // Update the HDR DisplayMaxNits based on content type
     if (!(m_SetsPP.fHdrDisplayMaxNits >= 1.0f && m_SetsPP.fHdrDisplayMaxNits <= 10000.0f))
     {
@@ -175,7 +151,6 @@ void CVRMainPPage::SetControls()
     swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
     SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
 }
-
 void CVRMainPPage::EnableControls()
 {
     if (!IsWindows8OrGreater())
@@ -205,34 +180,27 @@ void CVRMainPPage::EnableControls()
         GetDlgItem(IDC_COMBO8).EnableWindow(bEnable && m_SetsPP.bVPScaling);
         GetDlgItem(IDC_CHECK19).EnableWindow(bEnable && m_SetsPP.bHdrPassthrough);
     }
-
     GetDlgItem(IDC_STATIC8).EnableWindow(m_SetsPP.bConvertToSdr);
     GetDlgItem(IDC_EDIT1).EnableWindow(m_SetsPP.bConvertToSdr);
     GetDlgItem(IDC_SLIDER2).EnableWindow(m_SetsPP.bConvertToSdr);
-
     GetDlgItem(IDC_EDIT_DISPLAYMAX).EnableWindow(m_SetsPP.bHdrLocalToneMapping);
 }
-
 HRESULT CVRMainPPage::OnConnect(IUnknown* pUnk)
 {
     if (pUnk == nullptr) return E_POINTER;
-
     m_pVideoRenderer = pUnk;
     if (!m_pVideoRenderer)
     {
         return E_NOINTERFACE;
     }
-
     return S_OK;
 }
-
 HRESULT CVRMainPPage::OnDisconnect()
 {
     if (m_pVideoRenderer == nullptr)
     {
         return E_UNEXPECTED;
     }
-
     if (m_SetsPP.iSDRDisplayNits != m_oldSDRDisplayNits)
     {
         // OK or Apply buttons were not pressed. cancel the settings.
@@ -240,17 +208,13 @@ HRESULT CVRMainPPage::OnDisconnect()
         m_SetsPP.iSDRDisplayNits = m_oldSDRDisplayNits;
         m_pVideoRenderer->SetSettings(m_SetsPP);
     }
-
     m_pVideoRenderer.Release();
-
     return S_OK;
 }
-
 HRESULT CVRMainPPage::OnActivate()
 {
     // set m_hWnd for CWindow
     m_hWnd = m_hwnd;
-
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
@@ -258,10 +222,8 @@ HRESULT CVRMainPPage::OnActivate()
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Enhanced ACES", 5);
-
     m_pVideoRenderer->GetSettings(m_SetsPP);
     m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
-
     if (!IsWindows7SP1OrGreater())
     {
         GetDlgItem(IDC_CHECK1).EnableWindow(FALSE);
@@ -278,69 +240,53 @@ HRESULT CVRMainPPage::OnActivate()
         GetDlgItem(IDC_COMBO8).EnableWindow(FALSE);
         GetDlgItem(IDC_CHECK19).EnableWindow(FALSE);
     }
-
     EnableControls();
-
     SendDlgItemMessageW(IDC_COMBO6, CB_ADDSTRING, 0, (LPARAM)L"Fixed font size");
     SendDlgItemMessageW(IDC_COMBO6, CB_ADDSTRING, 0, (LPARAM)L"Increase font by window");
-
     ComboBox_AddStringData(m_hWnd, IDC_COMBO1, L"Auto 8/10-bit Integer", 0);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO1, L"8-bit Integer", 8);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO1, L"10-bit Integer", 10);
     ComboBox_AddStringData(m_hWnd, IDC_COMBO1, L"16-bit Floating Point", 16);
-
     SendDlgItemMessageW(IDC_COMBO8, CB_ADDSTRING, 0, (LPARAM)L"Disable");
     SendDlgItemMessageW(IDC_COMBO8, CB_ADDSTRING, 0, (LPARAM)L"for SD");
     SendDlgItemMessageW(IDC_COMBO8, CB_ADDSTRING, 0, (LPARAM)L"for \x2264 720p");
     SendDlgItemMessageW(IDC_COMBO8, CB_ADDSTRING, 0, (LPARAM)L"for \x2264 1080p");
     SendDlgItemMessageW(IDC_COMBO8, CB_ADDSTRING, 0, (LPARAM)L"for \x2264 1440p");
-
     SendDlgItemMessageW(IDC_COMBO7, CB_ADDSTRING, 0, (LPARAM)L"Do not change");
     SendDlgItemMessageW(IDC_COMBO7, CB_ADDSTRING, 0, (LPARAM)L"Allow turn on (fullscreen)");
     SendDlgItemMessageW(IDC_COMBO7, CB_ADDSTRING, 0, (LPARAM)L"Allow turn on");
     SendDlgItemMessageW(IDC_COMBO7, CB_ADDSTRING, 0, (LPARAM)L"Allow turn on/off (fullscreen)");
     SendDlgItemMessageW(IDC_COMBO7, CB_ADDSTRING, 0, (LPARAM)L"Allow turn on/off");
-
     SendDlgItemMessageW(IDC_COMBO5, CB_ADDSTRING, 0, (LPARAM)L"Nearest-neighbor");
     SendDlgItemMessageW(IDC_COMBO5, CB_ADDSTRING, 0, (LPARAM)L"Bilinear");
     SendDlgItemMessageW(IDC_COMBO5, CB_ADDSTRING, 0, (LPARAM)L"Catmull-Rom");
-
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Nearest-neighbor");
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Mitchell-Netravali");
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Catmull-Rom");
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Lanczos2");
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Lanczos3");
     SendDlgItemMessageW(IDC_COMBO2, CB_ADDSTRING, 0, (LPARAM)L"Jinc2m");
-
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Box");
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Bilinear");
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Hamming");
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Bicubic");
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Bicubic sharp");
     SendDlgItemMessageW(IDC_COMBO3, CB_ADDSTRING, 0, (LPARAM)L"Lanczos");
-
     SendDlgItemMessageW(IDC_COMBO4, CB_ADDSTRING, 0, (LPARAM)L"Discard");
     SendDlgItemMessageW(IDC_COMBO4, CB_ADDSTRING, 0, (LPARAM)L"Flip");
-
     SendDlgItemMessageW(IDC_SLIDER1, TBM_SETRANGE, 0, MAKELONG(0, 2));
     SendDlgItemMessageW(IDC_SLIDER1, TBM_SETTIC, 0, 1);
-
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETRANGE, 0,
-                        MAKELONG(SDR_NITS_MIN / SDR_NITS_STEP, SDR_NITS_MAX / SDR_NITS_STEP));
+    MAKELONG(SDR_NITS_MIN / SDR_NITS_STEP, SDR_NITS_MAX / SDR_NITS_STEP));
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETTIC, 0, SDR_NITS_DEF / SDR_NITS_STEP);
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETLINESIZE, 0, 1); // arrow keys
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPAGESIZE, 0, 5); // clicks on trackbar's channel
-
     SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
-
     SetControls();
-
     SetCursor(m_hWnd, IDC_ARROW);
     SetCursor(m_hWnd, IDC_COMBO1, IDC_HAND);
-
     return S_OK;
 }
-
 INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
     if (uMsg == WM_MVR_HDR_AUTOSWAP_UI)
@@ -353,13 +299,11 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
         AutoSwapLog(L"PropPage: UI refresh due to auto-swap message");
         return (LRESULT)1;
     }
-
     if (uMsg == WM_COMMAND)
     {
         LRESULT lValue;
         const int nID = LOWORD(wParam);
         int action = HIWORD(wParam);
-
         if (action == BN_CLICKED)
         {
             if (nID == IDC_CHECK1)
@@ -476,7 +420,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 SetDirty();
                 return (LRESULT)1;
             }
-
             if (nID == IDC_BUTTON1)
             {
                 m_SetsPP.SetDefault();
@@ -486,7 +429,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 return (LRESULT)1;
             }
         }
-
         if (action == CBN_SELCHANGE)
         {
             if (nID == IDC_COMBO6)
@@ -506,7 +448,6 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
                 {
                     m_SetsPP.iTexFormat = lValue;
                     SetDirty();
-
                     GetDlgItem(IDC_CHECK19).EnableWindow(
                         m_SetsPP.bUseD3D11 && m_SetsPP.bHdrPassthrough && m_SetsPP.iTexFormat != TEXFMT_8INT);
                 }
@@ -574,10 +515,8 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             }
             if (nID == IDC_COMBO9)
             {
-                AutoSwapLog(L"PropPage: user changed HDR combo, idx=%ld",
-                            (long)SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0));
+                AutoSwapLog(L"PropPage: user changed HDR combo, idx=%ld",(long)SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0));
                 lValue = ComboBox_GetCurItemData(m_hWnd, IDC_COMBO9); // Use item data instead of index
-
                 if (lValue == -1)
                 {
                     // "Ignore" option
@@ -642,11 +581,9 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             return (LRESULT)1;
         }
     }
-
     // Let the parent class handle the message.
     return CBasePropertyPage::OnReceiveMessage(hwnd, uMsg, wParam, lParam);
 }
-
 HRESULT CVRMainPPage::OnApplyChanges()
 {
     // get value
@@ -663,7 +600,6 @@ HRESULT CVRMainPPage::OnApplyChanges()
                     MB_OK | MB_ICONERROR);
         return S_FALSE;
     }
-
     if (displayMaxNits <= 1.0f || displayMaxNits > 10000.0f)
     {
         MessageBoxW(L"Invalid HDR Brightness. Please enter a valid number from 1.0 to 10000.0.", L"Error",
@@ -672,59 +608,45 @@ HRESULT CVRMainPPage::OnApplyChanges()
     }
     // if not error then set to m_setsPP
     m_SetsPP.fHdrDisplayMaxNits = displayMaxNits;
-
     m_pVideoRenderer->SetSettings(m_SetsPP);
     m_pVideoRenderer->SaveSettings();
-
     m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
-
     return S_OK;
 }
-
 // CVRInfoPPage
-
 CVRInfoPPage::CVRInfoPPage(LPUNKNOWN lpunk, HRESULT* phr) :
     CBasePropertyPage(L"InfoProp", lpunk, IDD_INFOPROPPAGE, IDS_INFOPROPPAGE_TITLE)
 {
     DLog(L"CVRInfoPPage()");
 }
-
 CVRInfoPPage::~CVRInfoPPage()
 {
     DLog(L"~CVRInfoPPage()");
-
     if (m_hMonoFont)
     {
         DeleteObject(m_hMonoFont);
         m_hMonoFont = 0;
     }
 }
-
 HRESULT CVRInfoPPage::OnConnect(IUnknown* pUnk)
 {
     if (pUnk == nullptr) return E_POINTER;
-
     m_pVideoRenderer = pUnk;
     if (!m_pVideoRenderer)
     {
         return E_NOINTERFACE;
     }
-
     return S_OK;
 }
-
 HRESULT CVRInfoPPage::OnDisconnect()
 {
     if (m_pVideoRenderer == nullptr)
     {
         return E_UNEXPECTED;
     }
-
     m_pVideoRenderer.Release();
-
     return S_OK;
 }
-
 HWND GetParentOwner(HWND hwnd)
 {
     HWND hWndParent = hwnd;
@@ -734,12 +656,9 @@ HWND GetParentOwner(HWND hwnd)
     {
         hWndParent = hWndT;
     }
-
     return hWndParent;
 }
-
 static WNDPROC OldControlProc;
-
 static LRESULT CALLBACK ControlProc(HWND control, UINT message, WPARAM wParam, LPARAM lParam)
 {
     if (message == WM_KEYDOWN && LOWORD(wParam) == VK_ESCAPE)
@@ -752,17 +671,13 @@ static LRESULT CALLBACK ControlProc(HWND control, UINT message, WPARAM wParam, L
         }
         return TRUE;
     }
-
     return CallWindowProcW(OldControlProc, control, message, wParam, lParam); // call edit control's own windowproc
 }
-
 HRESULT CVRInfoPPage::OnActivate()
 {
     // set m_hWnd for CWindow
     m_hWnd = m_hwnd;
-
     SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
-
     // init monospace font
     LOGFONTW lf = {};
     HDC hdc = GetWindowDC();
@@ -771,40 +686,31 @@ HRESULT CVRInfoPPage::OnActivate()
     lf.lfPitchAndFamily = FIXED_PITCH | FF_MODERN;
     wcscpy_s(lf.lfFaceName, L"Consolas");
     m_hMonoFont = CreateFontIndirectW(&lf);
-
     GetDlgItem(IDC_EDIT1).SetFont(m_hMonoFont);
     ASSERT(m_pVideoRenderer);
-
     if (!m_pVideoRenderer->GetActive())
     {
         SetDlgItemTextW(IDC_EDIT1, L"filter is not active");
         return S_OK;
     }
-
     std::wstring strInfo(L"Windows ");
     strInfo.append(GetWindowsVersion());
     strInfo.append(L"\r\n");
-
     std::wstring strVP;
     if (S_OK == m_pVideoRenderer->GetVideoProcessorInfo(strVP))
     {
         str_replace(strVP, L"\n", L"\r\n");
         strInfo.append(strVP);
     }
-
 #ifdef _DEBUG
     {
         std::vector<DisplayConfig_t> displayConfigs;
-
         bool ret = GetDisplayConfigs(displayConfigs);
-
         strInfo.append(L"\r\n");
-
         for (const auto& dc : displayConfigs)
         {
             double freq = (double)dc.refreshRate.Numerator / (double)dc.refreshRate.Denominator;
             strInfo += std::format(L"\r\n{} - {:.3f} Hz", dc.displayName, freq);
-
             if (dc.bitsPerChannel)
             {
                 // if bitsPerChannel is not set then colorEncoding and other values are invalid
@@ -815,7 +721,6 @@ HRESULT CVRInfoPPage::OnActivate()
                 }
                 strInfo += std::format(L" {}-bit", dc.bitsPerChannel);
             }
-
             const wchar_t* output = OutputTechnologyToString(dc.outputTechnology);
             if (output)
             {
@@ -824,10 +729,7 @@ HRESULT CVRInfoPPage::OnActivate()
         }
     }
 #endif
-
     SetDlgItemTextW(IDC_EDIT1, strInfo.c_str());
-
     OldControlProc = (WNDPROC)::SetWindowLongPtrW(::GetDlgItem(m_hWnd, IDC_EDIT1), GWLP_WNDPROC, (LONG_PTR)ControlProc);
-
     return S_OK;
 }
