@@ -98,8 +98,8 @@ float4 main(PS_INPUT input) : SV_Target {
     linearColor.rgb = max(linearColor.rgb, 0.0f);
     
     // Determine effective peak luminance
-    float effectiveMaxLum = max(MasteringMaxLuminanceNits, 1000.0f);
-    if (maxCLL > 100.0f && maxCLL <= MasteringMaxLuminanceNits) {
+    float effectiveMaxLum = max(masteringMaxLuminanceNits, 1000.0f);
+    if (maxCLL > 100.0f && maxCLL <= masteringMaxLuminanceNits) {
         effectiveMaxLum = maxCLL;
     }
     

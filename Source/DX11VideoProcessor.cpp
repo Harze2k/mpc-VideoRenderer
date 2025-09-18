@@ -990,8 +990,8 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
 // 16-byte aligned upload layout for ps_fix_hdr10.hlsl cbuffer(b0)
 struct HDR10ParamsCB
 {
-    float MasteringMinLuminanceNits;
-    float MasteringMaxLuminanceNits;
+    float masteringMinLuminanceNits;
+    float masteringMaxLuminanceNits;
     float MaxCLL;
     float MaxFALL;
     float DisplayMaxNits;
