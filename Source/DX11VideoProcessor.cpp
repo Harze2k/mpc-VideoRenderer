@@ -2374,29 +2374,28 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     m_hdr10 = {};
     m_Dovi.bValid = false; // Ensure DoVi is reset for every sample initially
 
-    if (CComQIPtr < IMediaSideData > pMediaSideData = pSample)
+    if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
     {
-        if (SourceIsPQorHLG() && (m_bHdrPassthrough || m_bHdrLocalToneMapping))
+        // Read HDR side-data UNCONDITIONALLY so auto-swap can detect HDR while we’re still in SDR mode.
         {
             MediaSideDataHDR* hdr = nullptr;
             size_t size = 0;
             hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &size);
-            if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDR))
-            {
+            if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDR)) {
                 m_hdr10.timestamp = tick;
+                m_hdr10.bValid = true;
                 updateStats = true;
 
+                // fill m_hdr10 fields exactly as before...
                 const auto& primaries_x = hdr->display_primaries_x;
                 const auto& primaries_y = hdr->display_primaries_y;
                 if (primaries_x[0] > 0. && primaries_x[1] > 0. && primaries_x[2] > 0.
-                    && primaries_y[0] > 0. && primaries_y[1] > 0. && primaries_y[2] > 0.
-                    && hdr->white_point_x > 0. && hdr->white_point_y > 0.
-                    && hdr->max_display_mastering_luminance > 0. && hdr->min_display_mastering_luminance >= 0.)
+                 && primaries_y[0] > 0. && primaries_y[1] > 0. && primaries_y[2] > 0.
+                 && hdr->white_point_x > 0. && hdr->white_point_y > 0.
+                 && hdr->max_display_mastering_luminance > 0. && hdr->min_display_mastering_luminance >= 0.)
                 {
-                    m_hdr10.bValid = true;
-
-                    m_hdr10.hdr10.RedPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[2] * 50000.0));
-                    m_hdr10.hdr10.RedPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[2] * 50000.0));
+                    m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(primaries_x[2] * 50000.0));
+                    m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(primaries_y[2] * 50000.0));
                     m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[0] * 50000.0));
                     m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[0] * 50000.0));
                     m_hdr10.hdr10.BluePrimary[0] = static_cast<UINT16>(std::lround(primaries_x[1] * 50000.0));
@@ -2404,10 +2403,8 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
                     m_hdr10.hdr10.WhitePoint[0] = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
                     m_hdr10.hdr10.WhitePoint[1] = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
 
-                    m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(
-                        hdr->max_display_mastering_luminance));
-                    m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(
-                        hdr->min_display_mastering_luminance * 10000.0));
+                    m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
+                    m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
                 }
             }
 
@@ -2613,18 +2610,14 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     if (detectedHDR == s_lastDetectedHDR) {
         if (s_stableFrames < 1000) s_stableFrames++;
     } else {
-        s_stableFrames = 0;
+        s_stableFrames = 1;
         s_lastDetectedHDR = detectedHDR;
     }
-
-    // Require: (a) at least 3 stable frames and (b) ≥700 ms since last swap
-    const bool stable = (s_stableFrames >= 3);
+    // Allow swap if: (a) ≥2 consecutive frames agree, and (b) ≥700 ms since last swap,
+    // and (c) we’re not mid-rebuild (UNKNOWN means a rebuild is already pending)
+    const bool stable = (s_stableFrames >= 2);
     const bool timeOk = (now - s_lastSwapTick) >= 700;
-
-    // If a rebuild is already in progress, do not trigger again
     const bool inRebuild = (m_activeHdrMode == HdrMode::UNKNOWN);
-
-    // Apply guards
     if (!(stable && timeOk) || inRebuild) {
         needSwap = false;
     }
