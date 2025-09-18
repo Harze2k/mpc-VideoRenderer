@@ -121,7 +121,7 @@ void CVRMainPPage::SetControls()
 	{
 		ComboBox_SelectByItemData(m_hWnd, IDC_COMBO9, -1);
 	}
-
+	
 	CheckDlgButton(IDC_CHECK18, m_SetsPP.bHdrPreferDoVi       ? BST_CHECKED : BST_UNCHECKED);
 	CheckDlgButton(IDC_CHECK14, m_SetsPP.bConvertToSdr        ? BST_CHECKED : BST_UNCHECKED);
 
@@ -154,6 +154,7 @@ void CVRMainPPage::SetControls()
 	wchar_t buffer[32] = {};
 	swprintf_s(buffer, L"%.1f", m_SetsPP.fHdrDisplayMaxNits);
 	SetDlgItemTextW(IDC_EDIT_DISPLAYMAX, buffer);
+	
 }
 
 void CVRMainPPage::EnableControls()
@@ -301,7 +302,8 @@ HRESULT CVRMainPPage::OnActivate()
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
 	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
-	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
+	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Möbius", 4);
+	ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACEScg", 5);
 	
 	SetControls();
 
@@ -511,24 +513,29 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 				case 2:
 					m_SetsPP.bHdrPassthrough = false;
 					m_SetsPP.bHdrLocalToneMapping = true;
-					m_SetsPP.iHdrLocalToneMappingType = 1;
+					m_SetsPP.iHdrLocalToneMappingType = 1; // ACES
 					break;
 				case 3:
 					m_SetsPP.bHdrPassthrough = false;
 					m_SetsPP.bHdrLocalToneMapping = true;
-					m_SetsPP.iHdrLocalToneMappingType = 2;
+					m_SetsPP.iHdrLocalToneMappingType = 2; // Reinhard
 					break;
 				case 4:
 					m_SetsPP.bHdrPassthrough = false;
 					m_SetsPP.bHdrLocalToneMapping = true;
-					m_SetsPP.iHdrLocalToneMappingType = 3;
+					m_SetsPP.iHdrLocalToneMappingType = 3; // Hable
 					break;
 				case 5:
 					m_SetsPP.bHdrPassthrough = false;
 					m_SetsPP.bHdrLocalToneMapping = true;
-					m_SetsPP.iHdrLocalToneMappingType = 4;
+					m_SetsPP.iHdrLocalToneMappingType = 4; // Möbius
 					break;
-				default:
+				case 6: // New ACEScg option
+					m_SetsPP.bHdrPassthrough = false;
+					m_SetsPP.bHdrLocalToneMapping = true;
+					m_SetsPP.iHdrLocalToneMappingType = 5; // ACEScg
+					break;
+					default:
 					break;
 				}
 				SetDirty();
@@ -578,6 +585,7 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 
 HRESULT CVRMainPPage::OnApplyChanges()
 {
+	
 	// get value
 	wchar_t data[32] = {};
 	GetDlgItemTextW(IDC_EDIT_DISPLAYMAX, data, 32);

@@ -2287,13 +2287,13 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     // If current settings don't match content, apply and re-init
     bool needSwap = false;
     Settings_t curSets; m_pFilter->GetSettings(curSets);
-    if (!detectedHDR) {
-        // SDR -> enforce passthrough
-        if (!curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping) needSwap = true;
-    } else {
-        // HDR -> enforce Local: ACES
-        if (!curSets.bHdrLocalToneMapping || curSets.iHdrLocalToneMappingType != 1 || curSets.bHdrPassthrough) needSwap = true;
-    }
+	if (!detectedHDR) {
+		// SDR -> enforce passthrough
+		if (!curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping) needSwap = true;
+	} else {
+		// HDR -> enforce Local: ACEScg (type 5)
+		if (!curSets.bHdrLocalToneMapping || curSets.iHdrLocalToneMappingType != 5 || curSets.bHdrPassthrough) needSwap = true;
+	}
 
     if (needSwap) {
         AutoSwapLog(L"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d", detectedHDR?L"HDR":L"SDR", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
@@ -2303,17 +2303,18 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         } else {
             curSets.bHdrPassthrough = false;
             curSets.bHdrLocalToneMapping = true;
-            curSets.iHdrLocalToneMappingType = 1; // ACES
+        	curSets.iHdrLocalToneMappingType = 5; // ACEScg for better quality
         }
-        m_pFilter->SetSettings(curSets);
-        AutoSwapLog(L"CopySample: Settings applied. New: pass=%d localTM=%d type=%d", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
-        // Notify UI if open
-        PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
-        // Force graph to rebuild
-        m_activeHdrMode = HdrMode::UNKNOWN;
-        m_pFilter->TriggerMediaTypeChange();
-        AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
-        return E_ABORT;
+    	m_pFilter->SetSettings(curSets);
+    	AutoSwapLog(L"CopySample: Settings applied. New: pass=%d localTM=%d type=%d", 
+			(int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType); // Notify UI if open
+    	
+    	PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
+    	// Force graph to rebuild
+    	m_activeHdrMode = HdrMode::UNKNOWN;
+    	m_pFilter->TriggerMediaTypeChange();
+    	AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
+    	return E_ABORT;
     }
 
     if (m_activeHdrMode != HdrMode::UNKNOWN)
@@ -4004,8 +4005,7 @@ void CDX11VideoProcessor::UpdateStatsStatic()
 				else if (m_bHdrLocalToneMapping)
 				{
 					m_strStatsHDR.append(L"Local tone mapping:");
-					switch (m_iHdrLocalToneMappingType)
-					{
+					switch (m_iHdrLocalToneMappingType) {
 					case 1: 
 						m_strStatsHDR.append(L" ACES");
 						break;
@@ -4017,6 +4017,12 @@ void CDX11VideoProcessor::UpdateStatsStatic()
 						break;
 					case 4: 
 						m_strStatsHDR.append(L" Mobius");
+						break;
+					case 5: 
+						m_strStatsHDR.append(L" ACEScg");
+						break;
+					default:
+						m_strStatsHDR.append(L" Unknown");
 						break;
 					}
 					m_strStatsHDR.append(std::format(L"\n Display Max Nits: {:.1f} nits", m_fHdrDisplayMaxNits));

@@ -1,3 +1,43 @@
+// === ACEScg helpers ===
+static const float3x3 Rec2020_to_XYZ = float3x3(
+    0.636958, 0.144617, 0.168881,
+    0.262700, 0.677998, 0.059302,
+    0.000000, 0.028073, 1.060985);
+    
+static const float3x3 XYZ_to_ACEScg = float3x3(
+    1.64102338, -0.32480329, -0.23642470,
+   -0.66366286,  1.61533159,  0.01675635,
+    0.01172189, -0.00828444,  0.98839486);
+    
+static const float3x3 ACEScg_to_XYZ = float3x3(
+    0.66245418, 0.13400421, 0.15618769,
+    0.27222872, 0.67408177, 0.05368952,
+   -0.00557373, 0.00406007, 1.01033910);
+
+static const float3x3 XYZ_to_Rec2020 = float3x3(
+    1.716651, -0.355671, -0.253366,
+   -0.666684,  1.616481,  0.015768,
+    0.017640, -0.042771,  0.942103);
+
+// Direct transforms for efficiency
+static const float3x3 Rec2020_to_ACEScg = mul(XYZ_to_ACEScg, Rec2020_to_XYZ);
+static const float3x3 ACEScg_to_Rec2020 = mul(XYZ_to_Rec2020, ACEScg_to_XYZ);
+
+float3 toACEScg(float3 rgb2020) { 
+    return mul(Rec2020_to_ACEScg, rgb2020); 
+}
+
+float3 fromACEScg(float3 rgbACES) { 
+    return mul(ACEScg_to_Rec2020, rgbACES); 
+}
+
+// Optimized ACES filmic curve for ACEScg
+float3 ACEScgFilmicCurve(float3 x) {
+    // Optimized constants for ACEScg color space
+    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
+    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
+}
+
 #include "../convert/st2084.hlsl"
 
 Texture2D tex : register(t0);
@@ -16,93 +56,93 @@ cbuffer RootConstants : register(b0)
     float maxCLL;
     float maxFALL;
     float displayMaxNits;
-    uint selection; // 1 = ACES, 2 = Reinhard, 3 = Habel, 4 = Möbius
+    uint selection; // 1 = ACES, 2 = Reinhard, 3 = Habel, 4 = Möbius, 5 = ACEScg
+    float reserved1;
+    float reserved2;
 };
 
-// ✅ ACES RRT + ODT Implementation
+// ACES RRT + ODT Implementation
 float3 RRTAndODTFit(float3 color) {
-    // Constants used in the ACES Filmic tone mapping
-    float A = 2.51f;  // Constant A
-    float B = 0.03f;  // Constant B
-    float C = 2.43f;  // Constant C
-    float D = 0.59f;  // Constant D
-    float E = 0.14f;  // Constant E
-
-    // Apply the ACES RRT + ODT
-    color = (color * (A * color + B)) / (color * (C * color + D) + E);
-    
-    return color;
+    const float A = 2.51f, B = 0.03f, C = 2.43f, D = 0.59f, E = 0.14f;
+    return (color * (A * color + B)) / (color * (C * color + D) + E);
 }
 
-// ✅ ACES Tone Mapping
 float3 ACESFilmTonemap(float3 color) {
     return RRTAndODTFit(color);
 }
 
-// ✅ Reinhard Tone Mapping
 float3 ReinhardTonemap(float3 color) {
     return color / (1.0 + color);
 }
 
-// ✅ Habel Tone Mapping
 float3 HabelTonemap(float3 color) {
-    float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
+    const float A = 0.15, B = 0.50, C = 0.10, D = 0.20, E = 0.02, F = 0.30;
     return ((color * (A * color + C * B) + D * E) / (color * (A * color + B) + D * F)) - E / F;
 }
 
-// ✅ Möbius Tone Mapping
 float3 MobiusTonemap(float3 color) {
-    float epsilon = 1e-6;
-    float maxL = displayMaxNits;
+    const float epsilon = 1e-6;
+    const float maxL = displayMaxNits;
     return color / (1.0 + color / (maxL + epsilon));
 }
 
-// ✅ Main Shader Entry Point
+// ACEScg tone mapping with proper color space handling
+float3 ACEScgTonemap(float3 color) {
+    // Convert to ACEScg color space
+    float3 acescg = toACEScg(color);
+    
+    // Apply filmic curve optimized for ACEScg
+    acescg = ACEScgFilmicCurve(acescg);
+    
+    // Convert back to Rec.2020
+    return fromACEScg(acescg);
+}
+
 float4 main(PS_INPUT input) : SV_Target {
     // Sample texture and convert from PQ to linear
     float4 color = tex.Sample(samp, input.Tex);
-    color = ST2084ToLinear(color, 10000.0f); // Convert PQ to Linear space
+    color = ST2084ToLinear(color, 10000.0f);
 
-    // Determine the effective peak luminance of the content for normalization.
-    // Use maxCLL if it is valid (greater than 0) and reasonably within the mastering display's peak.
-    // Otherwise, fall back to the mastering display's peak luminance. This avoids issues with missing
-    // or incorrect maxCLL metadata.
+    // Determine effective peak luminance
     float effectiveMaxLum = MasteringMaxLuminanceNits;
     if (maxCLL > 0.0 && maxCLL <= MasteringMaxLuminanceNits) {
         effectiveMaxLum = maxCLL;
     }
     
-    // Apply global normalization **before tone mapping**
-    // This scales the incoming linear light values so that the peak brightness
-    // of the content corresponds to a value of 1.0 before entering the tone mapper.
+    // Global normalization before tone mapping
+    effectiveMaxLum = max(effectiveMaxLum, 400.0f);
     color.rgb *= (1.0f / effectiveMaxLum);
+    float3 over = max(color.rgb - 1.0f, 0.0f);
+    color.rgb = color.rgb - over + over / (1.0f + 0.25f * over);
     color.rgb = saturate(color.rgb);
 
-    // Select the tone mapping function based on `selection`
+    // Apply tone mapping based on selection
     if (selection == 1) {
-        color.rgb = ACESFilmTonemap(color.rgb);  // Apply ACES Tone Mapping
+        color.rgb = ACESFilmTonemap(color.rgb);
     }
     else if (selection == 2) {
-        color.rgb = ReinhardTonemap(color.rgb);  // Apply Reinhard Tone Mapping
+        color.rgb = ReinhardTonemap(color.rgb);
     }
     else if (selection == 3) {
-        color.rgb = HabelTonemap(color.rgb);  // Apply Habel Tone Mapping
+        color.rgb = HabelTonemap(color.rgb);
     }
     else if (selection == 4) {
-        color.rgb = MobiusTonemap(color.rgb);  // Apply Möbius Tone Mapping
+        color.rgb = MobiusTonemap(color.rgb);
+    }
+    else if (selection == 5) {
+        color.rgb = ACEScgTonemap(color.rgb);
     }
     else {
-        color.rgb = ACESFilmTonemap(color.rgb);  // Default fallback to ACES
+        color.rgb = ACESFilmTonemap(color.rgb); // Default fallback
     }
 
-    // Scale to display peak brightness after tone mapping (skip for Möbius as it scales internally)
-    // The tonemapper outputs a normalized value (0-1), so we scale it to the target display's peak brightness.
+    // Scale to display peak brightness (skip for Möbius as it scales internally)
     if (selection != 4) {
         color.rgb *= displayMaxNits;
     }
 
-    // Convert back from linear to PQ color space
-    color = LinearToST2084(color, 10000.0f);  // Convert Linear to PQ
+    // Convert back from linear to PQ
+    color = LinearToST2084(color, 10000.0f);
 
-    return float4(color.rgb, color.a);  // Final output
+    return float4(color.rgb, color.a);
 }
