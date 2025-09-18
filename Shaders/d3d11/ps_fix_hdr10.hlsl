@@ -16,12 +16,12 @@ cbuffer RootConstants : register(b0)
     float maxCLL;
     float maxFALL;
     float displayMaxNits;
-    uint selection; // 1 = ACES, 2 = Reinhard, 3 = Habel, 4 = Möbius, 5 = ACEScg
+    uint selection; // 1 = ACES, 2 = Reinhard, 3 = Habel, 4 = Möbius, 5 = Enhanced ACES
     float reserved1;
     float reserved2;
 };
 
-// ACES RRT + ODT Implementation
+// Standard ACES RRT + ODT Implementation
 float3 RRTAndODTFit(float3 color) {
     const float A = 2.51f, B = 0.03f, C = 2.43f, D = 0.59f, E = 0.14f;
     return saturate((color * (A * color + B)) / (color * (C * color + D) + E));
@@ -42,90 +42,129 @@ float3 HabelTonemap(float3 color) {
 
 float3 MobiusTonemap(float3 color) {
     const float epsilon = 1e-6;
-    const float maxL = displayMaxNits;
+    const float maxL = max(displayMaxNits, 100.0f);
     return color / (1.0 + color / (maxL + epsilon));
 }
 
-// Improved ACEScg tone mapping
-float3 ACEScgTonemap(float3 color) {
-    // Ensure no negative values
-    color = max(color, 0.0f);
+// Enhanced ACES - Better alternative to ACEScg
+// This provides better color preservation and more accurate tone mapping
+float3 EnhancedACESTonemap(float3 color) {
+    // Pre-exposure adjustment for better highlight rolloff
+    color *= 0.6f;
     
-    // Simple but effective ACEScg-inspired tone mapping
-    // Based on ACES but with adjustments for the ACEScg color space
-    const float a = 2.8f;   // Slightly higher contrast
-    const float b = 0.02f;  // Lower toe
-    const float c = 2.6f;   // Adjusted shoulder start
-    const float d = 0.8f;   // Higher shoulder
-    const float e = 0.1f;   // Lower black point
+    // Enhanced ACES curve with better shadow/highlight separation
+    const float a = 2.8f;   // Higher contrast in mids
+    const float b = 0.01f;  // Darker shadows 
+    const float c = 2.2f;   // Earlier highlight rolloff
+    const float d = 0.7f;   // Smoother highlights
+    const float e = 0.08f;  // Better black point
     
     float3 result = (color * (a * color + b)) / (color * (c * color + d) + e);
+    
+    // Post-exposure compensation
+    result *= 1.2f;
+    
     return saturate(result);
 }
 
+// Fallback tone mapping for debugging
+float3 SimpleTonemap(float3 color) {
+    // Simple Reinhard-style mapping that should always work
+    return color / (color + 1.0f);
+}
+
 float4 main(PS_INPUT input) : SV_Target {
-    // Sample texture and convert from PQ to linear
+    // Sample texture
     float4 color = tex.Sample(samp, input.Tex);
     
-    // Safety check for invalid input
+    // Debug: Return magenta if we get invalid input to identify shader issues
     if (any(isnan(color.rgb)) || any(isinf(color.rgb))) {
-        return float4(0.0f, 0.0f, 0.0f, color.a);
+        return float4(1.0f, 0.0f, 1.0f, 1.0f); // Magenta for NaN/Inf
     }
     
-    color = ST2084ToLinear(color, 10000.0f);
+    // Convert from PQ to linear with error handling
+    float4 linearColor = color;
+    if (any(color.rgb > 0.0f)) {
+        linearColor = ST2084ToLinear(color, 10000.0f);
+        
+        // Check for conversion errors
+        if (any(isnan(linearColor.rgb)) || any(isinf(linearColor.rgb))) {
+            return float4(0.0f, 1.0f, 1.0f, 1.0f); // Cyan for conversion error
+        }
+    }
     
-    // Safety clamp after PQ conversion
-    color.rgb = max(color.rgb, 0.0f);
-
-    // Determine effective peak luminance with better defaults
+    // Ensure no negative values
+    linearColor.rgb = max(linearColor.rgb, 0.0f);
+    
+    // Determine effective peak luminance
     float effectiveMaxLum = max(MasteringMaxLuminanceNits, 1000.0f);
     if (maxCLL > 100.0f && maxCLL <= MasteringMaxLuminanceNits) {
         effectiveMaxLum = maxCLL;
     }
     
     // Normalize to [0,1] range for tone mapping
-    color.rgb /= effectiveMaxLum;
+    linearColor.rgb /= effectiveMaxLum;
     
-    // Soft clamp for values above 1.0
-    float3 over = max(color.rgb - 1.0f, 0.0f);
-    color.rgb = color.rgb - over + over / (1.0f + over);
+    // Gentle highlight rolloff before tone mapping
+    float maxComponent = max(max(linearColor.r, linearColor.g), linearColor.b);
+    if (maxComponent > 1.0f) {
+        float rolloff = 1.0f / (1.0f + (maxComponent - 1.0f) * 0.5f);
+        linearColor.rgb *= rolloff;
+    }
     
-    // Apply tone mapping based on selection
+    // Apply tone mapping with fallback handling
+    float3 toneMapped;
+    
     if (selection == 5) {
-        // ACEScg tone mapping
-        color.rgb = ACEScgTonemap(color.rgb);
+        // Enhanced ACES (replacement for ACEScg)
+        toneMapped = EnhancedACESTonemap(linearColor.rgb);
     }
     else if (selection == 1) {
-        // ACES tone mapping  
-        color.rgb = ACESFilmTonemap(color.rgb);
+        // Standard ACES
+        toneMapped = ACESFilmTonemap(linearColor.rgb);
     }
     else if (selection == 2) {
-        // Reinhard tone mapping
-        color.rgb = ReinhardTonemap(color.rgb);
+        // Reinhard
+        toneMapped = ReinhardTonemap(linearColor.rgb);
     }
     else if (selection == 3) {
-        // Habel tone mapping
-        color.rgb = HabelTonemap(color.rgb);
+        // Habel
+        toneMapped = HabelTonemap(linearColor.rgb);
     }
     else if (selection == 4) {
-        // Möbius tone mapping
-        color.rgb = MobiusTonemap(color.rgb);
+        // Möbius (handles scaling internally)
+        toneMapped = MobiusTonemap(linearColor.rgb);
     }
     else {
-        // Default to ACES
-        color.rgb = ACESFilmTonemap(color.rgb);
+        // Fallback to simple tone mapping
+        toneMapped = SimpleTonemap(linearColor.rgb);
     }
-
-    // Scale to display peak brightness (skip for Möbius as it handles this internally)
+    
+    // Check for tone mapping errors
+    if (any(isnan(toneMapped)) || any(isinf(toneMapped))) {
+        return float4(1.0f, 1.0f, 0.0f, 1.0f); // Yellow for tone mapping error
+    }
+    
+    // Scale to display brightness (skip for Möbius)
     if (selection != 4) {
-        color.rgb *= max(displayMaxNits, 100.0f);
+        float targetBrightness = max(displayMaxNits, 100.0f);
+        toneMapped *= targetBrightness;
     }
-
-    // Final safety clamp before PQ conversion
-    color.rgb = max(color.rgb, 0.0f);
-
-    // Convert back from linear to PQ
-    color = LinearToST2084(color, 10000.0f);
-
-    return color;
+    
+    // Final clamp
+    toneMapped = max(toneMapped, 0.0f);
+    
+    // Convert back to PQ with error handling
+    float4 result = float4(toneMapped, linearColor.a);
+    
+    if (any(toneMapped > 0.0f)) {
+        result = LinearToST2084(result, 10000.0f);
+        
+        // Final error check
+        if (any(isnan(result.rgb)) || any(isinf(result.rgb))) {
+            return float4(1.0f, 0.0f, 0.0f, 1.0f); // Red for final conversion error
+        }
+    }
+    
+    return result;
 }

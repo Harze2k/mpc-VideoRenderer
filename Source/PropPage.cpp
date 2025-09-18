@@ -250,6 +250,14 @@ HRESULT CVRMainPPage::OnActivate()
 {
     // set m_hWnd for CWindow
     m_hWnd = m_hwnd;
+    
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
+    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Enhanced ACES", 5);
 
     m_pVideoRenderer->GetSettings(m_SetsPP);
     m_oldSDRDisplayNits = m_SetsPP.iSDRDisplayNits;
@@ -270,7 +278,7 @@ HRESULT CVRMainPPage::OnActivate()
         GetDlgItem(IDC_COMBO8).EnableWindow(FALSE);
         GetDlgItem(IDC_CHECK19).EnableWindow(FALSE);
     }
-
+    
     EnableControls();
 
     SendDlgItemMessageW(IDC_COMBO6, CB_ADDSTRING, 0, (LPARAM)L"Fixed font size");
@@ -324,15 +332,7 @@ HRESULT CVRMainPPage::OnActivate()
     SendDlgItemMessageW(IDC_SLIDER2, TBM_SETPAGESIZE, 0, 5); // clicks on trackbar's channel
 
     SetDlgItemTextW(IDC_EDIT2, GetNameAndVersion());
-
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Ignore", -1);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Passthrough to display", 0);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACES", 1);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Reinhard", 2);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Hable", 3);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: Mobius", 4);
-    ComboBox_AddStringData(m_hWnd, IDC_COMBO9, L"Local: ACEScg", 5);
-
+    
     SetControls();
 
     SetCursor(m_hWnd, IDC_ARROW);
