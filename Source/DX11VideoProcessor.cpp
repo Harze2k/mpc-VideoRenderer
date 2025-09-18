@@ -2325,8 +2325,6 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
                 (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"),
                 (detectedMode == HdrMode::HDR ? L"HDR" : L"SDR"));
             AutoSwapLog(L"CopySample: Pipeline/content mismatch: pipeline=%s content=%s", m_activeHdrMode==HdrMode::HDR?L"HDR":L"SDR", detectedHDR?L"HDR":L"SDR");
-// Set to UNKNOWN
- to prevent triggering on every subsequent frame before re-init completes.
             m_activeHdrMode = HdrMode::UNKNOWN;
             m_pFilter->TriggerMediaTypeChange();
             return E_ABORT; // Abort processing this frame, the pipeline will be rebuilt.

@@ -1,8 +1,8 @@
-
 #pragma once
 #include <windows.h>
 #include <string>
 #include <string_view>
+#include <cstdarg>
 
 // Header-only logger & UI message helper to avoid link issues.
 static inline unsigned int GetAutoSwapUiMsg()
@@ -35,11 +35,11 @@ static inline void AutoSwapLog(const wchar_t* fmt, ...)
 	EnterCriticalSection(&s_cs);
 	wchar_t msg[2048] = {};
 	SYSTEMTIME st; GetLocalTime(&st);
-	int wrote = swprintf(msg, L"[%04u-%02u-%02u %02u:%02u:%02u.%03u]",
+	int wrote = swprintf_s(msg, _countof(msg), L"[%04u-%02u-%02u %02u:%02u:%02u.%03u] ",
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 	va_list ap; va_start(ap, fmt);
 	if (wrote < 0) wrote = 0;
-	_vsnwprintf(msg + wrote, _countof(msg) - wrote - 2, fmt, ap);
+	_vsnwprintf_s(msg + wrote, _countof(msg) - wrote - 2, _TRUNCATE, fmt, ap);
 	va_end(ap);
 	std::wstring line(msg);
 	line.append(L"\r\n");
