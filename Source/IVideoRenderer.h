@@ -131,11 +131,7 @@ struct Settings_t {
 	}
 
 	void SetDefault() {
-		if (IsWindows8OrGreater()) {
-			bUseD3D11                   = true;
-		} else {
-			bUseD3D11                   = false;
-		}
+		bUseD3D11                   = true;
 		bShowStats                      = false;
 		iResizeStats                    = 0;
 		iTexFormat                      = TEXFMT_AUTOINT;
@@ -159,17 +155,10 @@ struct Settings_t {
 		bAdjustPresentTime              = true;
 		bReinitByDisplay                = false;
 		bHdrPreferDoVi                  = false;
-		if (IsWindows10OrGreater()) {
-			bHdrLocalToneMapping		= true;
-			bHdrPassthrough             = false;
-			iHdrLocalToneMappingType    = 1;
-			fHdrDisplayMaxNits			= 1000.0f;
-		} else {
-			bHdrLocalToneMapping		= false;
-			bHdrPassthrough             = false;
-			iHdrLocalToneMappingType	= 0;
-			fHdrDisplayMaxNits			= 1000.0f;
-		}
+		bHdrLocalToneMapping		= false;
+		bHdrPassthrough             = false;
+		iHdrLocalToneMappingType	= 5;
+		fHdrDisplayMaxNits			= 1000.0f;
 		iHdrToggleDisplay               = HDRTD_Disabled;
 		bConvertToSdr                   = true;
 		iHdrOsdBrightness               = 0;

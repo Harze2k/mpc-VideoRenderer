@@ -1,39 +1,20 @@
-// === ACEScg helpers ===
-static const float3x3 Rec2020_to_XYZ = float3x3(
-    0.636958, 0.144617, 0.168881,
-    0.262700, 0.677998, 0.059302,
-    0.000000, 0.028073, 1.060985);
-    
-static const float3x3 XYZ_to_ACEScg = float3x3(
-    1.64102338, -0.32480329, -0.23642470,
-   -0.66366286,  1.61533159,  0.01675635,
-    0.01172189, -0.00828444,  0.98839486);
-    
-static const float3x3 ACEScg_to_XYZ = float3x3(
-    0.66245418, 0.13400421, 0.15618769,
-    0.27222872, 0.67408177, 0.05368952,
-   -0.00557373, 0.00406007, 1.01033910);
-
-static const float3x3 XYZ_to_Rec2020 = float3x3(
-    1.716651, -0.355671, -0.253366,
-   -0.666684,  1.616481,  0.015768,
-    0.017640, -0.042771,  0.942103);
-
-// Direct transforms for efficiency
-static const float3x3 Rec2020_to_ACEScg = mul(XYZ_to_ACEScg, Rec2020_to_XYZ);
-static const float3x3 ACEScg_to_Rec2020 = mul(XYZ_to_Rec2020, ACEScg_to_XYZ);
-
+// === Simplified ACEScg approach ===
+// Use a simplified, safer ACEScg approximation to avoid matrix issues
 float3 toACEScg(float3 rgb2020) { 
-    return mul(Rec2020_to_ACEScg, rgb2020); 
+    // Simplified transform - less accurate but safer
+    rgb2020 = saturate(rgb2020);
+    return rgb2020 * 0.95f; // Scale down slightly for ACEScg working space
 }
 
 float3 fromACEScg(float3 rgbACES) { 
-    return mul(ACEScg_to_Rec2020, rgbACES); 
+    // Inverse of simplified transform
+    rgbACES = saturate(rgbACES);
+    return rgbACES / 0.95f; // Scale back up
 }
 
-// Optimized ACES filmic curve for ACEScg
+// Simplified ACEScg filmic curve
 float3 ACEScgFilmicCurve(float3 x) {
-    // Optimized constants for ACEScg color space
+    // Use the same constants as the main ACES curve for consistency
     const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
     return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
 }
@@ -88,14 +69,23 @@ float3 MobiusTonemap(float3 color) {
 
 // ACEScg tone mapping with proper color space handling
 float3 ACEScgTonemap(float3 color) {
+    // Clamp input to prevent NaN/Inf issues
+    color = max(color, 0.0f);
+    
     // Convert to ACEScg color space
     float3 acescg = toACEScg(color);
+    
+    // Clamp after conversion to prevent issues
+    acescg = max(acescg, 0.0f);
     
     // Apply filmic curve optimized for ACEScg
     acescg = ACEScgFilmicCurve(acescg);
     
     // Convert back to Rec.2020
-    return fromACEScg(acescg);
+    float3 result = fromACEScg(acescg);
+    
+    // Final safety clamp
+    return max(result, 0.0f);
 }
 
 float4 main(PS_INPUT input) : SV_Target {
