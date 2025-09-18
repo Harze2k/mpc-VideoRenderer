@@ -984,6 +984,18 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
         EXECUTE_ASSERT(S_OK == m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_pCorrectionConstants));
     }
 }
+// 16-byte aligned upload layout for ps_fix_hdr10.hlsl cbuffer(b0)
+struct HDR10Params {
+    float MasteringMinLuminanceNits;
+    float MasteringMaxLuminanceNits;
+    float maxCLL;
+    float maxFALL;
+    float displayMaxNits;
+    UINT  selection;     // must be UINT to match HLSL 'uint selection'
+    float reserved1;
+    float reserved2;
+};
+static_assert(sizeof(HDR10Params) % 16 == 0, "cb size must be 16-byte aligned");
 
 void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits,
                                                float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType)
@@ -997,30 +1009,28 @@ void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, 
 
     DLog(L"SetHDR10ShaderParams: type={}, displayMaxNits={:.1f}", toneMappingType, displayMaxNits);
 
-    // needs to be 16 byte aligned
-    FLOAT cbuffer[] = {
-        masteringMinLuminanceNits, masteringMaxLuminanceNits, maxCLL, maxFALL, displayMaxNits, (float)toneMappingType,
-        0, 0
+    HDR10Params cb = {
+        masteringMinLuminanceNits,
+        masteringMaxLuminanceNits,
+        maxCLL,
+        maxFALL,
+        displayMaxNits,
+        (UINT)toneMappingType,
+        0.0f, 0.0f
     };
 
-    if (m_pHDR10ToneMappingConstants)
-    {
-        m_pDeviceContext->UpdateSubresource(m_pHDR10ToneMappingConstants, 0, nullptr, &cbuffer, 0, 0);
-    }
-    else
-    {
-        D3D11_BUFFER_DESC BufferDesc = {
-            .ByteWidth = (sizeof(cbuffer) + 15) & ~15,
-            .Usage = D3D11_USAGE_DEFAULT,
-            .BindFlags = D3D11_BIND_CONSTANT_BUFFER,
-        };
-        D3D11_SUBRESOURCE_DATA InitData = {&cbuffer, 0, 0};
-        HRESULT result = m_pDevice->CreateBuffer(&BufferDesc, &InitData, &m_pHDR10ToneMappingConstants);
-        if (FAILED(result))
-        {
-            DLog(L"SetHDR10ShaderParams() failed to create m_pHDR10ToneMappingConstants. Error: {}", HR2Str(result));
+    if (m_pHDR10ToneMappingConstants) {
+        m_pDeviceContext->UpdateSubresource(m_pHDR10ToneMappingConstants, 0, nullptr, &cb, 0, 0);
+    } else {
+        D3D11_BUFFER_DESC bd = {};
+        bd.ByteWidth = (UINT)((sizeof(HDR10Params) + 15) & ~15);
+        bd.Usage = D3D11_USAGE_DEFAULT;
+        bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+        D3D11_SUBRESOURCE_DATA init = { &cb, 0, 0 };
+        HRESULT hr2 = m_pDevice->CreateBuffer(&bd, &init, &m_pHDR10ToneMappingConstants);
+        if (FAILED(hr2)) {
+            DLog(L"SetHDR10ShaderParams() failed CreateBuffer: {}", HR2Str(hr2));
         }
-        EXECUTE_ASSERT(S_OK == result);
     }
 }
 
@@ -1835,38 +1845,31 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 {
     DLog(L"CDX11VideoProcessor::InitMediaType()");
 
-    if (!VerifyMediaType(pmt))
-    {
-        return FALSE;
-    }
+    if (!VerifyMediaType(pmt)) { return FALSE; }
 
     ReleaseVP();
-    m_activeHdrMode = HdrMode::UNKNOWN; // Reset on every init
-    AutoSwapLog(L"InitMediaType: reset activeHdr; settings pass=%d localTM=%d type=%d", (int)m_bHdrPassthrough,
-                (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
+    m_activeHdrMode = HdrMode::UNKNOWN;
+    AutoSwapLog(L"InitMediaType: reset activeHdr; settings pass=%d localTM=%d type=%d",
+                (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
 
     auto FmtParams = GetFmtConvParams(pmt);
 
     const BITMAPINFOHEADER* pBIH = nullptr;
     m_decExFmt.value = 0;
 
-    if (pmt->formattype == FORMAT_VideoInfo2)
-    {
+    if (pmt->formattype == FORMAT_VideoInfo2) {
         const VIDEOINFOHEADER2* vih2 = (VIDEOINFOHEADER2*)pmt->pbFormat;
         pBIH = &vih2->bmiHeader;
         m_srcRect = vih2->rcSource;
         m_srcAspectRatioX = vih2->dwPictAspectRatioX;
         m_srcAspectRatioY = vih2->dwPictAspectRatioY;
-        if (FmtParams.CSType == CS_YUV && (vih2->dwControlFlags & (AMCONTROL_USED | AMCONTROL_COLORINFO_PRESENT)))
-        {
+        if (FmtParams.CSType == CS_YUV && (vih2->dwControlFlags & (AMCONTROL_USED | AMCONTROL_COLORINFO_PRESENT))) {
             m_decExFmt.value = vih2->dwControlFlags;
-            m_decExFmt.SampleFormat = AMCONTROL_USED | AMCONTROL_COLORINFO_PRESENT; // ignore other flags
+            m_decExFmt.SampleFormat = AMCONTROL_USED | AMCONTROL_COLORINFO_PRESENT;
         }
         m_bInterlaced = (vih2->dwInterlaceFlags & AMINTERLACE_IsInterlaced);
         m_rtAvgTimePerFrame = vih2->AvgTimePerFrame;
-    }
-    else if (pmt->formattype == FORMAT_VideoInfo)
-    {
+    } else if (pmt->formattype == FORMAT_VideoInfo) {
         const VIDEOINFOHEADER* vih = (VIDEOINFOHEADER*)pmt->pbFormat;
         pBIH = &vih->bmiHeader;
         m_srcRect = vih->rcSource;
@@ -1874,9 +1877,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
         m_srcAspectRatioY = 0;
         m_bInterlaced = 0;
         m_rtAvgTimePerFrame = vih->AvgTimePerFrame;
-    }
-    else
-    {
+    } else {
         return FALSE;
     }
 
@@ -1886,89 +1887,55 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
     UINT biWidth = pBIH->biWidth;
     UINT biHeight = labs(pBIH->biHeight);
     UINT biSizeImage = pBIH->biSizeImage;
-    if (pBIH->biSizeImage == 0 && pBIH->biCompression == BI_RGB)
-    {
-        // biSizeImage may be zero for BI_RGB bitmaps
-        biSizeImage = biWidth * biHeight * pBIH->biBitCount / 8;
-    }
+    if (pBIH->biSizeImage == 0 && pBIH->biCompression == BI_RGB) { biSizeImage = biWidth * biHeight * pBIH->biBitCount / 8; }
 
     m_srcLines = biHeight * FmtParams.PitchCoeff / 2;
     m_srcPitch = biWidth * FmtParams.Packsize;
-    switch (FmtParams.cformat)
-    {
-    case CF_Y8:
-    case CF_NV12:
-    case CF_RGB24:
-    case CF_BGR48:
-        m_srcPitch = ALIGN(m_srcPitch, 4);
-        break;
+    switch (FmtParams.cformat) {
+        case CF_Y8:
+        case CF_NV12:
+        case CF_RGB24:
+        case CF_BGR48: m_srcPitch = ALIGN(m_srcPitch, 4); break;
     }
-    if (pBIH->biCompression == BI_RGB && pBIH->biHeight > 0)
-    {
-        m_srcPitch = -m_srcPitch;
-    }
+    if (pBIH->biCompression == BI_RGB && pBIH->biHeight > 0) { m_srcPitch = -m_srcPitch; }
 
     UINT origW = biWidth;
     UINT origH = biHeight;
-    if (pmt->FormatLength() == 112 + sizeof(VR_Extradata))
-    {
+    if (pmt->FormatLength() == 112 + sizeof(VR_Extradata)) {
         const VR_Extradata* vrextra = reinterpret_cast<VR_Extradata*>(pmt->pbFormat + 112);
-        if (vrextra->QueryWidth == pBIH->biWidth && vrextra->QueryHeight == pBIH->biHeight && vrextra->Compression ==
-            pBIH->biCompression)
-        {
+        if (vrextra->QueryWidth == pBIH->biWidth && vrextra->QueryHeight == pBIH->biHeight && vrextra->Compression == pBIH->biCompression) {
             origW = vrextra->FrameWidth;
             origH = abs(vrextra->FrameHeight);
         }
     }
 
-    if (m_srcRect.IsRectNull())
-    {
-        m_srcRect.SetRect(0, 0, origW, origH);
-    }
+    if (m_srcRect.IsRectNull()) { m_srcRect.SetRect(0, 0, origW, origH); }
     m_srcRectWidth = m_srcRect.Width();
     m_srcRectHeight = m_srcRect.Height();
 
     m_srcExFmt = SpecifyExtendedFormat(m_decExFmt, FmtParams, m_srcRectWidth, m_srcRectHeight);
 
     bool disableD3D11VP = false;
-    switch (FmtParams.cformat)
-    {
-    case CF_NV12: disableD3D11VP = !m_VPFormats.bNV12;
-        break;
-    case CF_P010:
-    case CF_P016: disableD3D11VP = !m_VPFormats.bP01x;
-        break;
-    case CF_YUY2: disableD3D11VP = !m_VPFormats.bYUY2;
-        break;
-    default: disableD3D11VP = !m_VPFormats.bOther;
-        break;
+    switch (FmtParams.cformat) {
+        case CF_NV12: disableD3D11VP = !m_VPFormats.bNV12; break;
+        case CF_P010:
+        case CF_P016: disableD3D11VP = !m_VPFormats.bP01x; break;
+        case CF_YUY2: disableD3D11VP = !m_VPFormats.bYUY2; break;
+        default: disableD3D11VP = !m_VPFormats.bOther; break;
     }
-    if (m_srcExFmt.VideoTransferMatrix == VIDEOTRANSFERMATRIX_YCgCo || m_Dovi.bValid)
-    {
-        disableD3D11VP = true;
-    }
-    if (FmtParams.CSType == CS_RGB && m_VendorId == PCIV_NVIDIA)
-    {
-        // D3D11 VP does not work correctly if RGB32 with odd frame width (source or target) on Nvidia adapters
-        disableD3D11VP = true;
-    }
-    if (disableD3D11VP)
-    {
-        FmtParams.VP11Format = DXGI_FORMAT_UNKNOWN;
-    }
+    if (m_srcExFmt.VideoTransferMatrix == VIDEOTRANSFERMATRIX_YCgCo || m_Dovi.bValid) { disableD3D11VP = true; }
+    if (FmtParams.CSType == CS_RGB && m_VendorId == PCIV_NVIDIA) { disableD3D11VP = true; }
+    if (disableD3D11VP) { FmtParams.VP11Format = DXGI_FORMAT_UNKNOWN; }
 
     const auto frm_gcd = std::gcd(m_srcRectWidth, m_srcRectHeight);
     const auto srcFrameARX = m_srcRectWidth / frm_gcd;
     const auto srcFrameARY = m_srcRectHeight / frm_gcd;
 
-    if (!m_srcAspectRatioX || !m_srcAspectRatioY)
-    {
+    if (!m_srcAspectRatioX || !m_srcAspectRatioY) {
         m_srcAspectRatioX = srcFrameARX;
         m_srcAspectRatioY = srcFrameARY;
         m_srcAnamorphic = false;
-    }
-    else
-    {
+    } else {
         const auto ar_gcd = std::gcd(m_srcAspectRatioX, m_srcAspectRatioY);
         m_srcAspectRatioX /= ar_gcd;
         m_srcAspectRatioY /= ar_gcd;
@@ -1985,127 +1952,77 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
     m_pPSHDR10ToneMapping.Release();
     m_pHDR10ToneMappingConstants.Release();
 
-
     UpdateTexParams(FmtParams.CDepth);
 
-    if (m_bHdrAllowSwitchDisplay && m_srcVideoTransferFunction != m_srcExFmt.VideoTransferFunction)
-    {
+    if (m_bHdrAllowSwitchDisplay && m_srcVideoTransferFunction != m_srcExFmt.VideoTransferFunction) {
         auto ret = HandleHDRToggle();
-        if (!ret && ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && m_bHdrSupport && SourceIsPQorHLG() && !
-            m_pDXGISwapChain4))
-        {
-            ret = true;
-        }
-        if (ret)
-        {
-            ReleaseSwapChain();
-            Init(m_hWnd, false);
-        }
+        if (!ret && ((m_bHdrPassthrough || m_bHdrLocalToneMapping) && m_bHdrSupport && SourceIsPQorHLG() && !m_pDXGISwapChain4)) { ret = true; }
+        if (ret) { ReleaseSwapChain(); Init(m_hWnd, false); }
     }
 
-    if (Preferred10BitOutput() && m_SwapChainFmt == DXGI_FORMAT_B8G8R8A8_UNORM)
-    {
-        ReleaseSwapChain();
-        Init(m_hWnd, false);
-    }
+    if (Preferred10BitOutput() && m_SwapChainFmt == DXGI_FORMAT_B8G8R8A8_UNORM) { ReleaseSwapChain(); Init(m_hWnd, false); }
 
     m_srcVideoTransferFunction = m_srcExFmt.VideoTransferFunction;
 
     HRESULT hr = E_NOT_VALID_STATE;
 
     // D3D11 Video Processor
-    if (FmtParams.VP11Format != DXGI_FORMAT_UNKNOWN)
-    {
+    if (FmtParams.VP11Format != DXGI_FORMAT_UNKNOWN) {
         hr = InitializeD3D11VP(FmtParams, origW, origH, pmt);
-        if (SUCCEEDED(hr))
-        {
+        if (SUCCEEDED(hr)) {
             UINT resId = 0;
             m_pCorrectionConstants.Release();
             bool bTransFunc22 = m_srcExFmt.VideoTransferFunction == DXVA2_VideoTransFunc_22
                 || m_srcExFmt.VideoTransferFunction == DXVA2_VideoTransFunc_709
                 || m_srcExFmt.VideoTransferFunction == DXVA2_VideoTransFunc_240M;
 
-            if (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084 && !(m_bHdrSupport && (m_bHdrPassthrough ||
-                m_bHdrLocalToneMapping)) && m_bConvertToSdr)
-            {
+            if (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084 && !(m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping)) && m_bConvertToSdr) {
                 resId = m_D3D11VP.IsPqSupported() ? IDF_PS_11_CONVERT_PQ_TO_SDR : IDF_PS_11_FIXCONVERT_PQ_TO_SDR;
                 m_strCorrection = L"PQ to SDR";
-            }
-            else if (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_HLG)
-            {
-                if (m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping))
-                {
+            } else if (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_HLG) {
+                if (m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping)) {
                     resId = IDF_PS_11_CONVERT_HLG_TO_PQ;
                     m_strCorrection = L"HLG to PQ";
-                }
-                else if (m_bConvertToSdr)
-                {
+                } else if (m_bConvertToSdr) {
                     resId = IDF_PS_11_FIXCONVERT_HLG_TO_SDR;
                     m_strCorrection = L"HLG to SDR";
-                }
-                else if (m_srcExFmt.VideoPrimaries == MFVideoPrimaries_BT2020)
-                {
-                    // HLG compatible with SDR
+                } else if (m_srcExFmt.VideoPrimaries == MFVideoPrimaries_BT2020) {
                     resId = IDF_PS_11_FIX_BT2020;
                     m_strCorrection = L"Fix BT.2020";
                 }
-            }
-            else if (bTransFunc22 && m_srcExFmt.VideoPrimaries == MFVideoPrimaries_BT2020)
-            {
+            } else if (bTransFunc22 && m_srcExFmt.VideoPrimaries == MFVideoPrimaries_BT2020) {
                 resId = IDF_PS_11_FIX_BT2020;
                 m_strCorrection = L"Fix BT.2020";
             }
 
-            if (resId)
-            {
+            if (resId) {
                 EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSCorrection, resId));
-                DLogIf(m_pPSCorrection, L"CDX11VideoProcessor::InitMediaType() m_pPSCorrection('{}') created",
-                       m_strCorrection);
+                DLogIf(m_pPSCorrection, L"CDX11VideoProcessor::InitMediaType() m_pPSCorrection('{}') created", m_strCorrection);
                 SetShaderLuminanceParams();
             }
 
-            // In DX11VideoProcessor.cpp, add safety check in InitMediaType():
-            if (m_bHdrSupport && m_bHdrLocalToneMapping)
-            {
+            if (m_bHdrSupport && m_bHdrLocalToneMapping) {
                 EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
-                DLogIf(m_pPSHDR10ToneMapping,
-                       L"CDX11VideoProcessor::InitMediaType() m_pPSHDR10ToneMapping(type: '{}') created",
-                       m_iHdrLocalToneMappingType);
-
-                // Add validation for ACEScg type
-                if (m_iHdrLocalToneMappingType == 5)
-                {
-                    DLog(L"CDX11VideoProcessor::InitMediaType() ACEScg tone mapping selected");
-                    // Ensure we have valid shader constants
-                    if (!m_pHDR10ToneMappingConstants)
-                    {
-                        DLog(L"CDX11VideoProcessor::InitMediaType() Creating HDR10 constants for ACEScg");
-                    }
-                }
-
+                DLogIf(m_pPSHDR10ToneMapping, L"CDX11VideoProcessor::InitMediaType() m_pPSHDR10ToneMapping(type: '{}') created", m_iHdrLocalToneMappingType);
+                if (m_iHdrLocalToneMappingType == 5) { DLog(L"CDX11VideoProcessor::InitMediaType() ACEScg tone mapping selected"); }
                 SetHDR10ShaderParams(0, 0, 0, 0, m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
             }
-        }
-        else
-        {
+        } else {
             ReleaseVP();
         }
     }
 
     // Tex Video Processor
-    if (FAILED(hr) && FmtParams.DX11Format != DXGI_FORMAT_UNKNOWN)
-    {
+    if (FAILED(hr) && FmtParams.DX11Format != DXGI_FORMAT_UNKNOWN) {
         m_bVPUseRTXVideoHDR = false;
         hr = InitializeTexVP(FmtParams, origW, origH);
-        if (SUCCEEDED(hr))
-        {
+        if (SUCCEEDED(hr)) {
             SetShaderConvertColorParams();
             SetShaderLuminanceParams();
         }
     }
 
-    if (SUCCEEDED(hr))
-    {
+    if (SUCCEEDED(hr)) {
         UpdateBitmapShader();
         UpdateTexures();
         UpdatePostScaleTexures();
@@ -2113,20 +2030,24 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 
         m_pFilter->m_inputMT = *pmt;
 
-        const auto bHdrOutput = m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping) && (SourceIsHDR() ||
-            m_bVPUseRTXVideoHDR);
+        const auto bHdrOutput = m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping) && (SourceIsHDR() || m_bVPUseRTXVideoHDR);
         m_activeHdrMode = bHdrOutput ? HdrMode::HDR : HdrMode::SDR;
         AutoSwapLog(L"InitMediaType: pipeline set to %s (bHdrOutput=%d; TF=%d)",
-                    (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"), (int)bHdrOutput,
-                    (int)m_srcExFmt.VideoTransferFunction);
+                    (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"), (int)bHdrOutput, (int)m_srcExFmt.VideoTransferFunction);
         DLog(L"CDX11VideoProcessor::InitMediaType() - Pipeline configured for: %s",
              (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"));
+
+        // Present one black frame after (re)config to avoid showing uninitialized content
+        if (m_pFilter) { m_pFilter->Redraw(); }
+        // If you prefer inline: replace the line above with:
+        // if (m_pDXGISwapChain1) { FillBlack(); }
 
         return TRUE;
     }
 
     return FALSE;
 }
+
 
 HRESULT CDX11VideoProcessor::InitializeD3D11VP(const FmtConvParams_t& params, const UINT width, const UINT height,
                                                const CMediaType* pmt)
@@ -2681,14 +2602,31 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     // Check if current settings match ideal settings  
     bool needSwap = false;
     
-    if (!detectedHDR) {
-        // For SDR content, only swap if currently using HDR processing
-        needSwap = (curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping);
+    // Debounce + single-shot guard for auto-swap thrash
+    static DWORD s_lastSwapTick = 0;
+    static int   s_stableFrames = 0;
+    static bool  s_lastDetectedHDR = false;
+
+    DWORD now = GetTickCount();
+
+    // Track stability of HDR/SDR detection over frames
+    if (detectedHDR == s_lastDetectedHDR) {
+        if (s_stableFrames < 1000) s_stableFrames++;
     } else {
-        // For HDR content, swap if not using Enhanced ACES local tone mapping
-        needSwap = (!curSets.bHdrLocalToneMapping) || 
-                   (curSets.bHdrPassthrough) ||
-                   (curSets.iHdrLocalToneMappingType != 5);
+        s_stableFrames = 0;
+        s_lastDetectedHDR = detectedHDR;
+    }
+
+    // Require: (a) at least 3 stable frames and (b) ≥700 ms since last swap
+    const bool stable = (s_stableFrames >= 3);
+    const bool timeOk = (now - s_lastSwapTick) >= 700;
+
+    // If a rebuild is already in progress, do not trigger again
+    const bool inRebuild = (m_activeHdrMode == HdrMode::UNKNOWN);
+
+    // Apply guards
+    if (!(stable && timeOk) || inRebuild) {
+        needSwap = false;
     }
                     
     if (needSwap) {
@@ -2715,6 +2653,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         // Force graph to rebuild
         m_activeHdrMode = HdrMode::UNKNOWN;
         m_pFilter->TriggerMediaTypeChange();
+        s_lastSwapTick = now;
         AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
         return E_ABORT;
     }
