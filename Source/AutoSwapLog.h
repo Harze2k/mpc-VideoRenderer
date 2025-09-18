@@ -35,7 +35,7 @@ static inline void AutoSwapLog(const wchar_t* fmt, ...)
 	EnterCriticalSection(&s_cs);
 	wchar_t msg[2048] = {};
 	SYSTEMTIME st; GetLocalTime(&st);
-	int wrote = swprintf(msg, L"[%04u-%02u-%02u %02u:%02u:%02u.%03u] ",
+	int wrote = swprintf(msg, L"[%04u-%02u-%02u %02u:%02u:%02u.%03u]",
 		st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
 	va_list ap; va_start(ap, fmt);
 	if (wrote < 0) wrote = 0;
