@@ -9,17 +9,18 @@ struct PS_INPUT
     float2 Tex : TEXCOORD;
 };
 
-cbuffer RootConstants : register(b0)
+// HDR10 tone mapping params (dedicated slot to avoid clashes with other passes)
+cbuffer HDR10ParamsCB : register(b0)
 {
     float MasteringMinLuminanceNits;
     float MasteringMaxLuminanceNits;
-    float maxCLL;
-    float maxFALL;
-    float displayMaxNits;
-    uint selection; // 1 = ACES, 2 = Reinhard, 3 = Habel, 4 = Möbius, 5 = Enhanced ACES
-    float reserved1;
-    float reserved2;
-};
+    float MaxCLL;
+    float MaxFALL;
+    float DisplayMaxNits;
+    UINT  Selection;   // note: UINT (integer)
+    float Reserved1;
+    float Reserved2;
+}
 
 // Standard ACES RRT + ODT Implementation
 float3 RRTAndODTFit(float3 color) {
@@ -112,32 +113,30 @@ float4 main(PS_INPUT input) : SV_Target {
         linearColor.rgb *= rolloff;
     }
     
-    // Apply tone mapping with fallback handling
+    // Apply tone mapping (selection: 1=ACES, 2=Reinhard, 3=Habel, 4=Mobius, 5=Enhanced ACES)
     float3 toneMapped;
-    
-    if (selection == 5) {
-        // Enhanced ACES (replacement for ACEScg)
+    uint sel = selection;
+    sel = (sel < 1u || sel > 5u) ? 1u : sel; // sanitize: default to ACES
+
+    switch (sel) {
+    case 5u: // Enhanced ACES
         toneMapped = EnhancedACESTonemap(linearColor.rgb);
-    }
-    else if (selection == 1) {
-        // Standard ACES
+        break;
+    case 1u: // ACES
         toneMapped = ACESFilmTonemap(linearColor.rgb);
-    }
-    else if (selection == 2) {
-        // Reinhard
+        break;
+    case 2u: // Reinhard
         toneMapped = ReinhardTonemap(linearColor.rgb);
-    }
-    else if (selection == 3) {
-        // Habel
+        break;
+    case 3u: // Habel
         toneMapped = HabelTonemap(linearColor.rgb);
-    }
-    else if (selection == 4) {
-        // Möbius (handles scaling internally)
+        break;
+    case 4u: // Mobius
         toneMapped = MobiusTonemap(linearColor.rgb);
-    }
-    else {
-        // Fallback to simple tone mapping
-        toneMapped = SimpleTonemap(linearColor.rgb);
+        break;
+    default:
+        toneMapped = linearColor.rgb; // unreachable due to sanitize
+        break;
     }
     
     // Check for tone mapping errors

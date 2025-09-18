@@ -2432,18 +2432,31 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     HRESULT hr = S_OK;
     m_FieldDrawn = 0;
     bool updateStats = false;
-
     m_hdr10 = {};
     m_Dovi.bValid = false; // Ensure DoVi is reset for every sample initially
+    size_t sdSize = 0;
+    if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
+    {
+        // --- HDR10 metadata ---
+        const MediaSideDataHDR* hdr = nullptr;
+        hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, reinterpret_cast<const BYTE**>(&hdr), &sdSize);
+        if (SUCCEEDED(hr) && sdSize == sizeof(MediaSideDataHDR) && hdr)
+        {
+            // TODO: copy hdr fields into your m_hdr10, set m_hdr10.bValid = true, etc.
+        }
 
-    //if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
-    //{
-    // Read HDR side-data UNCONDITIONALLY so auto-swap can detect HDR while we’re still in SDR mode.
-    //{
+        // --- 3D offset metadata ---
+        const MediaSideData3DOffset* offset = nullptr;
+        hr = pMediaSideData->GetSideData(IID_MediaSideData3DOffset, reinterpret_cast<const BYTE**>(&offset), &sdSize);
+        if (SUCCEEDED(hr) && sdSize == sizeof(MediaSideData3DOffset) && offset && offset->offset_count > 0 && offset->offset[0] != 0)
+        {
+            // TODO: handle 3D offsets if you need them
+        }
+    }
     MediaSideDataHDR* hdr = nullptr;
-    size_t size = 0;
-    hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &size);
-    if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDR))
+    //size_t size = 0;
+    hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &sdSize);
+    if (SUCCEEDED(hr) && &sdSize == sizeof(MediaSideDataHDR))
     {
         m_hdr10.timestamp = tick;
         m_hdr10.bValid = true;
@@ -2481,11 +2494,10 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         m_hdr10.hdr10.MaxFrameAverageLightLevel = hdrCLL->MaxFALL;
     }
 
-
-    size_t size = 0;
+    //size_t size = 0;
     MediaSideData3DOffset* offset = nullptr;
-    hr = pMediaSideData->GetSideData(IID_MediaSideData3DOffset, (const BYTE**)&offset, &size);
-    if (SUCCEEDED(hr) && size == sizeof(MediaSideData3DOffset) && offset->offset_count > 0 && offset->offset[0])
+    hr = pMediaSideData->GetSideData(IID_MediaSideData3DOffset, (const BYTE**)&offset, &sdSize);
+    if (SUCCEEDED(hr) && &sdSize == sizeof(MediaSideData3DOffset) && offset->offset_count > 0 && offset->offset[0])
     {
         m_nStereoSubtitlesOffsetInPixels = offset->offset[0];
     }
