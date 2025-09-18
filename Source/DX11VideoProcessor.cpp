@@ -2429,200 +2429,209 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         }
     }
 
-m_hdr10 = {};
-m_Dovi.bValid = false; // reset DoVi every sample
+    bool updateStats = false; // FIXED: Declare updateStats variable
+    m_hdr10 = {};
+    m_Dovi.bValid = false; // reset DoVi every sample
 
-if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
-{
-    HRESULT hrLocal = S_OK;
-    size_t size = 0;
-
-    // --- HDR10 mastering metadata ---
-    const MediaSideDataHDR* hdr = nullptr;
-    size = 0;
-    hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDR,reinterpret_cast<const BYTE**>(&hdr), &size);
-    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDR) && hdr)
+    if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
     {
-        m_hdr10.timestamp = tick;
-        bool valid = false;
+        HRESULT hrLocal = S_OK;
+        size_t size = 0;
 
-        const auto& px = hdr->display_primaries_x;
-        const auto& py = hdr->display_primaries_y;
-        if (px[0] > 0.f && px[1] > 0.f && px[2] > 0.f &&
-            py[0] > 0.f && py[1] > 0.f && py[2] > 0.f &&
-            hdr->white_point_x > 0.f && hdr->white_point_y > 0.f &&
-            hdr->max_display_mastering_luminance > 0.f &&
-            hdr->min_display_mastering_luminance >= 0.f)
+        // --- HDR10 mastering metadata ---
+        const MediaSideDataHDR* hdr = nullptr;
+        size = 0;
+        hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDR,reinterpret_cast<const BYTE**>(&hdr), &size);
+        if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDR) && hdr)
         {
-            valid = true;
+            m_hdr10.timestamp = tick;
+            bool valid = false;
 
-            // SMPTExy (0..1) -> SMPTE integer coding (0..50000)
-            m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(px[2] * 50000.0));
-            m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(py[2] * 50000.0));
-            m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(px[0] * 50000.0));
-            m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(py[0] * 50000.0));
-            m_hdr10.hdr10.BluePrimary[0]  = static_cast<UINT16>(std::lround(px[1] * 50000.0));
-            m_hdr10.hdr10.BluePrimary[1]  = static_cast<UINT16>(std::lround(py[1] * 50000.0));
-            m_hdr10.hdr10.WhitePoint[0]   = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
-            m_hdr10.hdr10.WhitePoint[1]   = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
+            const auto& px = hdr->display_primaries_x;
+            const auto& py = hdr->display_primaries_y;
+            if (px[0] > 0.f && px[1] > 0.f && px[2] > 0.f &&
+                py[0] > 0.f && py[1] > 0.f && py[2] > 0.f &&
+                hdr->white_point_x > 0.f && hdr->white_point_y > 0.f &&
+                hdr->max_display_mastering_luminance > 0.f &&
+                hdr->min_display_mastering_luminance >= 0.f)
+            {
+                valid = true;
 
-            m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
-            m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
+                // SMPTExy (0..1) -> SMPTE integer coding (0..50000)
+                m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(px[2] * 50000.0));
+                m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(py[2] * 50000.0));
+                m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(px[0] * 50000.0));
+                m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(py[0] * 50000.0));
+                m_hdr10.hdr10.BluePrimary[0]  = static_cast<UINT16>(std::lround(px[1] * 50000.0));
+                m_hdr10.hdr10.BluePrimary[1]  = static_cast<UINT16>(std::lround(py[1] * 50000.0));
+                m_hdr10.hdr10.WhitePoint[0]   = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
+                m_hdr10.hdr10.WhitePoint[1]   = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
+
+                m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
+                m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
+            }
+
+            m_hdr10.bValid = valid;
+            if (valid) { updateStats = true; }
         }
 
-        m_hdr10.bValid = valid;
-        if (valid) { updateStats = true; }
-    }
-
-    // --- Content Light Level ---
-    const MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
-    size = 0;
-    hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel,
-                                          reinterpret_cast<const BYTE**>(&hdrCLL), &size);
-    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDRContentLightLevel) && hdrCLL)
-    {
-        m_hdr10.hdr10.MaxContentLightLevel        = hdrCLL->MaxCLL;
-        m_hdr10.hdr10.MaxFrameAverageLightLevel   = hdrCLL->MaxFALL;
-    }
-
-    // --- 3D subtitle offset ---
-    const MediaSideData3DOffset* offset = nullptr;
-    size = 0;
-    hrLocal = pMediaSideData->GetSideData(IID_MediaSideData3DOffset,
-                                          reinterpret_cast<const BYTE**>(&offset), &size);
-    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideData3DOffset) && offset &&
-        offset->offset_count > 0 && offset->offset[0] != 0)
-    {
-        m_nStereoSubtitlesOffsetInPixels = offset->offset[0];
-    }
-
-    // --- Dolby Vision (optional) ---
-    if (m_srcParams.CSType == CS_YUV && (m_bHdrPreferDoVi || !SourceIsPQorHLG()))
-    {
-        const MediaSideDataDOVIMetadata* pDOVI = nullptr;
+        // --- Content Light Level ---
+        const MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
         size = 0;
-        hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataDOVIMetadata,
-                                              reinterpret_cast<const BYTE**>(&pDOVI), &size);
-        if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataDOVIMetadata) && CheckDoviMetadata(pDOVI, 1))
+        hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel,
+                                              reinterpret_cast<const BYTE**>(&hdrCLL), &size);
+        if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDRContentLightLevel) && hdrCLL)
         {
-            const bool bYCCtoRGBChanged = !m_PSConvColorData.bEnable ||
-            (memcmp(
-                &m_Dovi.msd.ColorMetadata.ycc_to_rgb_matrix,
-                &pDOVIMetadata->ColorMetadata.ycc_to_rgb_matrix,
-                sizeof(MediaSideDataDOVIMetadata::ColorMetadata.ycc_to_rgb_matrix) + sizeof(
-                    MediaSideDataDOVIMetadata::ColorMetadata.ycc_to_rgb_offset)
-            ) != 0);
-            const bool bRGBtoLMSChanged =
-            (memcmp(
-                &m_Dovi.msd.ColorMetadata.rgb_to_lms_matrix,
-                &pDOVIMetadata->ColorMetadata.rgb_to_lms_matrix,
-                sizeof(MediaSideDataDOVIMetadata::ColorMetadata.rgb_to_lms_matrix)
-            ) != 0);
-            const bool bMappingCurvesChanged = !m_pDoviCurvesConstantBuffer ||
-            (memcmp(
-                &m_Dovi.msd.Mapping.curves,
-                &pDOVIMetadata->Mapping.curves,
-                sizeof(MediaSideDataDOVIMetadata::Mapping.curves)
-            ) != 0);
-            const bool bMasteringLuminanceChanged = m_Dovi.msd.ColorMetadata.source_max_pq != pDOVIMetadata->
-                ColorMetadata.source_max_pq
-                || m_Dovi.msd.ColorMetadata.source_min_pq != pDOVIMetadata->ColorMetadata.source_min_pq;
+            m_hdr10.hdr10.MaxContentLightLevel        = hdrCLL->MaxCLL;
+            m_hdr10.hdr10.MaxFrameAverageLightLevel   = hdrCLL->MaxFALL;
+        }
 
-            bool bMMRChanged = false;
-            if (bMappingCurvesChanged)
+        // --- 3D subtitle offset ---
+        const MediaSideData3DOffset* offset = nullptr;
+        size = 0;
+        hrLocal = pMediaSideData->GetSideData(IID_MediaSideData3DOffset,
+                                              reinterpret_cast<const BYTE**>(&offset), &size);
+        if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideData3DOffset) && offset &&
+            offset->offset_count > 0 && offset->offset[0] != 0)
+        {
+            m_nStereoSubtitlesOffsetInPixels = offset->offset[0];
+        }
+
+        // --- Dolby Vision (optional) ---
+        if (m_srcParams.CSType == CS_YUV && (m_bHdrPreferDoVi || !SourceIsPQorHLG()))
+        {
+            const MediaSideDataDOVIMetadata* pDOVIMetadata = nullptr; // FIXED: Changed from pDOVI to pDOVIMetadata
+            size = 0;
+            hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataDOVIMetadata,
+                                                  reinterpret_cast<const BYTE**>(&pDOVIMetadata), &size);
+            if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataDOVIMetadata) && CheckDoviMetadata(pDOVIMetadata, 1))
             {
-                bool has_mmr = false;
-                for (const auto& curve : pDOVIMetadata->Mapping.curves)
+                const bool bYCCtoRGBChanged = !m_PSConvColorData.bEnable ||
+                (memcmp(
+                    &m_Dovi.msd.ColorMetadata.ycc_to_rgb_matrix,
+                    &pDOVIMetadata->ColorMetadata.ycc_to_rgb_matrix,
+                    sizeof(pDOVIMetadata->ColorMetadata.ycc_to_rgb_matrix)) != 0) || // FIXED: Added sizeof()
+                (memcmp(
+                    &m_Dovi.msd.ColorMetadata.ycc_to_rgb_offset,
+                    &pDOVIMetadata->ColorMetadata.ycc_to_rgb_offset,
+                    sizeof(pDOVIMetadata->ColorMetadata.ycc_to_rgb_offset)) != 0); // FIXED: Split into two memcmp calls
+                
+                const bool bRGBtoLMSChanged =
+                (memcmp(
+                    &m_Dovi.msd.ColorMetadata.rgb_to_lms_matrix,
+                    &pDOVIMetadata->ColorMetadata.rgb_to_lms_matrix,
+                    sizeof(pDOVIMetadata->ColorMetadata.rgb_to_lms_matrix)
+                ) != 0);
+                
+                const bool bMappingCurvesChanged = !m_pDoviCurvesConstantBuffer ||
+                (memcmp(
+                    &m_Dovi.msd.Mapping.curves,
+                    &pDOVIMetadata->Mapping.curves,
+                    sizeof(pDOVIMetadata->Mapping.curves)
+                ) != 0);
+                
+                const bool bMasteringLuminanceChanged = m_Dovi.msd.ColorMetadata.source_max_pq != pDOVIMetadata->
+                    ColorMetadata.source_max_pq
+                    || m_Dovi.msd.ColorMetadata.source_min_pq != pDOVIMetadata->ColorMetadata.source_min_pq;
+
+                bool bMMRChanged = false;
+                if (bMappingCurvesChanged)
                 {
-                    for (uint8_t i = 0; i < (curve.num_pivots - 1); i++)
+                    bool has_mmr = false;
+                    for (const auto& curve : pDOVIMetadata->Mapping.curves)
                     {
-                        if (curve.mapping_idc[i] == 1)
+                        for (uint8_t i = 0; i < (curve.num_pivots - 1); i++)
                         {
-                            has_mmr = true;
-                            break;
+                            if (curve.mapping_idc[i] == 1)
+                            {
+                                has_mmr = true;
+                                break;
+                            }
                         }
                     }
+                    if (m_Dovi.bHasMMR != has_mmr)
+                    {
+                        m_Dovi.bHasMMR = has_mmr;
+                        m_pDoviCurvesConstantBuffer.Release();
+                        bMMRChanged = true;
+                    }
                 }
-                if (m_Dovi.bHasMMR != has_mmr)
+
+                memcpy(&m_Dovi.msd, pDOVIMetadata, sizeof(MediaSideDataDOVIMetadata));
+                const bool doviStateChanged = !m_Dovi.bValid;
+                m_Dovi.bValid = true;
+
+                if (bMasteringLuminanceChanged)
                 {
-                    m_Dovi.bHasMMR = has_mmr;
-                    m_pDoviCurvesConstantBuffer.Release();
-                    bMMRChanged = true;
+                    // based on libplacebo source code
+                    constexpr float
+                        PQ_M1 = 2610.f / (4096.f * 4.f),
+                        PQ_M2 = 2523.f / 4096.f * 128.f,
+                        PQ_C1 = 3424.f / 4096.f,
+                        PQ_C2 = 2413.f / 4096.f * 32.f,
+                        PQ_C3 = 2392.f / 4096.f * 32.f;
+
+                    auto pl_hdr_rescale = [](float x)
+                    {
+                        x = powf(x, 1.0f / PQ_M2);
+                        x = fmaxf(x - PQ_C1, 0.0f) / (PQ_C2 - PQ_C3 * x);
+                        x = powf(x, 1.0f / PQ_M1);
+                        x *= 10000.0f;
+
+                        return x;
+                    };
+
+                    m_DoviMaxMasteringLuminance = static_cast<UINT>(pl_hdr_rescale(
+                        m_Dovi.msd.ColorMetadata.source_max_pq / 4095.f));
+                    m_DoviMinMasteringLuminance = static_cast<UINT>(pl_hdr_rescale(
+                        m_Dovi.msd.ColorMetadata.source_min_pq / 4095.f) * 10000.0);
                 }
-            }
 
-            memcpy(&m_Dovi.msd, pDOVIMetadata, sizeof(MediaSideDataDOVIMetadata));
-            const bool doviStateChanged = !m_Dovi.bValid;
-            m_Dovi.bValid = true;
-
-            if (bMasteringLuminanceChanged)
-            {
-                // based on libplacebo source code
-                constexpr float
-                    PQ_M1 = 2610.f / (4096.f * 4.f),
-                    PQ_M2 = 2523.f / 4096.f * 128.f,
-                    PQ_C1 = 3424.f / 4096.f,
-                    PQ_C2 = 2413.f / 4096.f * 32.f,
-                    PQ_C3 = 2392.f / 4096.f * 32.f;
-
-                auto pl_hdr_rescale = [](float x)
+                if (m_D3D11VP.IsReady())
                 {
-                    x = powf(x, 1.0f / PQ_M2);
-                    x = fmaxf(x - PQ_C1, 0.0f) / (PQ_C2 - PQ_C3 * x);
-                    x = powf(x, 1.0f / PQ_M1);
-                    x *= 10000.0f;
-
-                    return x;
-                };
-
-                m_DoviMaxMasteringLuminance = static_cast<UINT>(pl_hdr_rescale(
-                    m_Dovi.msd.ColorMetadata.source_max_pq / 4095.f));
-                m_DoviMinMasteringLuminance = static_cast<UINT>(pl_hdr_rescale(
-                    m_Dovi.msd.ColorMetadata.source_min_pq / 4095.f) * 10000.0);
-            }
-
-            if (m_D3D11VP.IsReady())
-            {
-                InitMediaType(&m_pFilter->m_inputMT);
-            }
-            else if (doviStateChanged)
-            {
-                UpdateStatsStatic();
-            }
-
-            if (bYCCtoRGBChanged)
-            {
-                DLog(L"CDX11VideoProcessor::CopySample() : DoVi ycc_to_rgb_matrix is changed");
-                SetShaderConvertColorParams();
-            }
-            if (bRGBtoLMSChanged || bMMRChanged)
-            {
-                DLogIf(bRGBtoLMSChanged, L"CDX11VideoProcessor::CopySample() : DoVi rgb_to_lms_matrix is changed");
-                DLogIf(bMMRChanged, L"CDX11VideoProcessor::CopySample() : DoVi has_mmr is changed");
-                UpdateConvertColorShader();
-            }
-            if (bMappingCurvesChanged)
-            {
-                if (m_Dovi.bHasMMR)
-                {
-                    hr = SetShaderDoviCurves();
+                    InitMediaType(&m_pFilter->m_inputMT);
                 }
-                else
+                else if (doviStateChanged)
                 {
-                    hr = SetShaderDoviCurvesPoly();
+                    UpdateStatsStatic();
                 }
-            }
 
-            if (doviStateChanged && !SourceIsPQorHLG())
-            {
-                ReleaseSwapChain();
-                Init(m_hWnd, false);
+                if (bYCCtoRGBChanged)
+                {
+                    DLog(L"CDX11VideoProcessor::CopySample() : DoVi ycc_to_rgb_matrix is changed");
+                    SetShaderConvertColorParams();
+                }
+                if (bRGBtoLMSChanged || bMMRChanged)
+                {
+                    DLogIf(bRGBtoLMSChanged, L"CDX11VideoProcessor::CopySample() : DoVi rgb_to_lms_matrix is changed");
+                    DLogIf(bMMRChanged, L"CDX11VideoProcessor::CopySample() : DoVi has_mmr is changed");
+                    UpdateConvertColorShader();
+                }
+                if (bMappingCurvesChanged)
+                {
+                    HRESULT hrCurves; // FIXED: Declare local hr variable
+                    if (m_Dovi.bHasMMR)
+                    {
+                        hrCurves = SetShaderDoviCurves();
+                    }
+                    else
+                    {
+                        hrCurves = SetShaderDoviCurvesPoly();
+                    }
+                }
 
-                m_srcVideoTransferFunction = 0;
-                InitMediaType(&m_pFilter->m_inputMT);
+                if (doviStateChanged && !SourceIsPQorHLG())
+                {
+                    ReleaseSwapChain();
+                    Init(m_hWnd, false);
+
+                    m_srcVideoTransferFunction = 0;
+                    InitMediaType(&m_pFilter->m_inputMT);
+                }
             }
         }
-    }
+    } // End of IMediaSideData processing
+
     // ---- START OF NEW LOGIC ----
     // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
     const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) ||
@@ -2691,7 +2700,7 @@ if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
         s_lastDetectedHDR = detectedHDR;
     }
     // Allow swap if: (a) ≥2 consecutive frames agree, and (b) ≥700 ms since last swap,
-    // and (c) we’re not mid-rebuild (UNKNOWN means a rebuild is already pending)
+    // and (c) we're not mid-rebuild (UNKNOWN means a rebuild is already pending)
     const bool stable = (s_stableFrames >= 2);
     const bool timeOk = (now - s_lastSwapTick) >= 700;
     const bool inRebuild = (m_activeHdrMode == HdrMode::UNKNOWN);
@@ -2749,6 +2758,9 @@ if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
             return E_ABORT; // Abort processing this frame, the pipeline will be rebuilt.
         }
     }
+
+    // FIXED: Declare hr variable for the rest of the method
+    HRESULT hr = S_OK;
 
     if (CComQIPtr < IMediaSampleD3D11 > pMSD3D11 = pSample)
     {
