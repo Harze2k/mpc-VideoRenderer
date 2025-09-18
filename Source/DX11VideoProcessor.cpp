@@ -609,7 +609,6 @@ HRESULT CDX11VideoProcessor::Init(const HWND hwnd, const bool displayHdrChanged,
     {
         m_srcVideoTransferFunction = 0;
     }
-
     IDXGIAdapter* pDXGIAdapter = nullptr;
     const UINT currentAdapter = GetAdapter(hwnd, m_pDXGIFactory1, &pDXGIAdapter);
     CheckPointer(pDXGIAdapter, E_FAIL);
