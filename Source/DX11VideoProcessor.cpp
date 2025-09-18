@@ -2605,7 +2605,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     // Debounce + single-shot guard for auto-swap thrash
     static DWORD s_lastSwapTick = 0;
     static int   s_stableFrames = 0;
-    static bool  s_lastDetectedHDR = false;
+    s_lastDetectedHDR = false;
 
     DWORD now = GetTickCount();
 
