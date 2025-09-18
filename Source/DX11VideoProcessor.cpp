@@ -2058,7 +2058,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
                        m_iHdrLocalToneMappingType);
                 if (m_iHdrLocalToneMappingType == 5)
                 {
-                    DLog(L"CDX11VideoProcessor::InitMediaType() ACEScg tone mapping selected");
+                    DLog(L"CDX11VideoProcessor::InitMediaType() Enhanced ACES tone mapping selected");
                 }
                 SetHDR10ShaderParams(0, 0, 0, 0, m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
             }
@@ -2515,21 +2515,21 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
                     &m_Dovi.msd.ColorMetadata.ycc_to_rgb_offset,
                     &pDOVIMetadata->ColorMetadata.ycc_to_rgb_offset,
                     sizeof(pDOVIMetadata->ColorMetadata.ycc_to_rgb_offset)) != 0); // FIXED: Split into two memcmp calls
-                
+
                 const bool bRGBtoLMSChanged =
                 (memcmp(
                     &m_Dovi.msd.ColorMetadata.rgb_to_lms_matrix,
                     &pDOVIMetadata->ColorMetadata.rgb_to_lms_matrix,
                     sizeof(pDOVIMetadata->ColorMetadata.rgb_to_lms_matrix)
                 ) != 0);
-                
+
                 const bool bMappingCurvesChanged = !m_pDoviCurvesConstantBuffer ||
                 (memcmp(
                     &m_Dovi.msd.Mapping.curves,
                     &pDOVIMetadata->Mapping.curves,
                     sizeof(pDOVIMetadata->Mapping.curves)
                 ) != 0);
-                
+
                 const bool bMasteringLuminanceChanged = m_Dovi.msd.ColorMetadata.source_max_pq != pDOVIMetadata->
                     ColorMetadata.source_max_pq
                     || m_Dovi.msd.ColorMetadata.source_min_pq != pDOVIMetadata->ColorMetadata.source_min_pq;
@@ -2633,6 +2633,11 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     } // End of IMediaSideData processing
 
     // ---- START OF NEW LOGIC ----
+    // Debounce + single-shot guard for auto-swap thrash
+    static DWORD s_lastSwapTick = 0;
+    static int s_stableFrames = 0;
+    static bool s_lastDetectedHDR = false;
+
     // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
     const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) ||
         (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_HLG);
@@ -2640,7 +2645,6 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     const bool detectedHDR = srcTFisHDR || sideDataHDR;
 
     // Only log once per content type change or every 100 frames to reduce spam
-    static bool s_lastDetectedHDR = false;
     static int s_logCounter = 0;
     bool shouldLog = (detectedHDR != s_lastDetectedHDR) || (++s_logCounter % 100 == 0);
 
@@ -2679,35 +2683,30 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         idealMaxNits = 1000.0f;
     }
 
-    // Check if current settings match ideal settings  
-    bool needSwap = false;
-
-    // Debounce + single-shot guard for auto-swap thrash
-    static DWORD s_lastSwapTick = 0;
-    static int s_stableFrames = 0;
-    s_lastDetectedHDR = false;
+    // Check if current settings match ideal settings
+    const bool settingsDiffer = (curSets.bHdrPassthrough != idealPassthrough) ||
+                                (curSets.bHdrLocalToneMapping != idealLocalTM) ||
+                                (idealLocalTM && curSets.iHdrLocalToneMappingType != idealType) ||
+                                (fabs(curSets.fHdrDisplayMaxNits - idealMaxNits) > 0.1f);
 
     DWORD now = GetTickCount();
 
     // Track stability of HDR/SDR detection over frames
     if (detectedHDR == s_lastDetectedHDR)
     {
-        if (s_stableFrames < 1000) s_stableFrames++;
+        if (s_stableFrames < 100) s_stableFrames++; // Cap at a reasonable number
     }
     else
     {
         s_stableFrames = 1;
         s_lastDetectedHDR = detectedHDR;
     }
-    // Allow swap if: (a) ≥2 consecutive frames agree, and (b) ≥700 ms since last swap,
+    // Allow swap if: (a) >=2 consecutive frames agree, and (b) >700 ms since last swap,
     // and (c) we're not mid-rebuild (UNKNOWN means a rebuild is already pending)
     const bool stable = (s_stableFrames >= 2);
-    const bool timeOk = (now - s_lastSwapTick) >= 700;
+    const bool timeOk = (now - s_lastSwapTick) > 700;
     const bool inRebuild = (m_activeHdrMode == HdrMode::UNKNOWN);
-    if (!(stable && timeOk) || inRebuild)
-    {
-        needSwap = false;
-    }
+    const bool needSwap = settingsDiffer && stable && timeOk && !inRebuild;
 
     if (needSwap)
     {
@@ -2848,263 +2847,6 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     }
 
     m_RenderStats.copyticks = GetPreciseTick() - tick;
-
-    return hr;
-}
-
-HRESULT CDX11VideoProcessor::Render(int field, const REFERENCE_TIME frameStartTime)
-{
-    CheckPointer(m_TexSrcVideo.pTexture, E_FAIL);
-    CheckPointer(m_pDXGISwapChain1, E_FAIL);
-
-    if (field)
-    {
-        m_FieldDrawn = field;
-    }
-
-    CComPtr < ID3D11Texture2D > pBackBuffer;
-    HRESULT hr = m_pDXGISwapChain1->GetBuffer(0, IID_PPV_ARGS(&pBackBuffer));
-    if (FAILED(hr))
-    {
-        DLog(L"CDX11VideoProcessor::Render() : GetBuffer() failed with error {}", HR2Str(hr));
-        return hr;
-    }
-
-    uint64_t tick1 = GetPreciseTick();
-
-    if (!m_windowRect.IsRectEmpty())
-    {
-        // fill the BackBuffer with black
-        ID3D11RenderTargetView* pRenderTargetView;
-        if (S_OK == m_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &pRenderTargetView))
-        {
-            const FLOAT ClearColor[4] = {0.0f, 0.0f, 0.0f, 1.0f};
-            m_pDeviceContext->ClearRenderTargetView(pRenderTargetView, ClearColor);
-            pRenderTargetView->Release();
-        }
-    }
-
-    if (!m_renderRect.IsRectEmpty())
-    {
-        hr = Process(pBackBuffer, m_srcRect, m_videoRect, m_FieldDrawn == 2);
-    }
-
-    if (!m_pPSHalfOUtoInterlace)
-    {
-        DrawSubtitles(pBackBuffer);
-    }
-
-    if (m_bShowStats)
-    {
-        hr = DrawStats(pBackBuffer);
-    }
-
-    if (m_bAlphaBitmapEnable)
-    {
-        D3D11_TEXTURE2D_DESC desc;
-        pBackBuffer->GetDesc(&desc);
-        D3D11_VIEWPORT VP = {
-            m_AlphaBitmapNRectDest.left * desc.Width,
-            m_AlphaBitmapNRectDest.top * desc.Height,
-            (m_AlphaBitmapNRectDest.right - m_AlphaBitmapNRectDest.left) * desc.Width,
-            (m_AlphaBitmapNRectDest.bottom - m_AlphaBitmapNRectDest.top) * desc.Height,
-            0.0f,
-            1.0f
-        };
-        hr = AlphaBlt(m_TexAlphaBitmap.pShaderResource, pBackBuffer,
-                      m_pAlphaBitmapVertex, &VP,
-                      m_pSamplerLinear);
-    }
-
-#if 0
-    {
-        // Tearing test (very non-optimal implementation, use only for tests)
-        static int nTearingPos = 0;
-
-        ID3D11RenderTargetView* pRenderTargetView;
-        if (S_OK == m_pDevice->CreateRenderTargetView(pBackBuffer, nullptr, &pRenderTargetView))
-        {
-            CD3D11Rectangle d3d11rect;
-            HRESULT hr2 = d3d11rect.InitDeviceObjects(m_pDevice, m_pDeviceContext);
-
-            const SIZE szWindow = m_windowRect.Size();
-            RECT rcTearing;
-
-            rcTearing.left = nTearingPos;
-            rcTearing.top = 0;
-            rcTearing.right = rcTearing.left + 4;
-            rcTearing.bottom = szWindow.cy;
-            hr2 = d3d11rect.Set(rcTearing, szWindow, D3DCOLOR_XRGB(255, 0, 0));
-            hr2 = d3d11rect.Draw(pRenderTargetView, szWindow);
-
-            rcTearing.left = (rcTearing.right + 15) % szWindow.cx;
-            rcTearing.right = rcTearing.left + 4;
-            hr2 = d3d11rect.Set(rcTearing, szWindow, D3DCOLOR_XRGB(255, 0, 0));
-            hr2 = d3d11rect.Draw(pRenderTargetView, szWindow);
-
-            pRenderTargetView->Release();
-            d3d11rect.InvalidateDeviceObjects();
-
-            nTearingPos = (nTearingPos + 7) % szWindow.cx;
-        }
-    }
-#endif
-
-    uint64_t tick3 = GetPreciseTick();
-    m_RenderStats.paintticks = tick3 - tick1;
-
-    if (m_pDXGISwapChain4)
-    {
-        if (m_hdr10.bValid)
-        {
-            if (m_DoviMaxMasteringLuminance > m_hdr10.hdr10.MaxMasteringLuminance)
-            {
-                m_hdr10.hdr10.MaxMasteringLuminance = m_DoviMaxMasteringLuminance;
-            }
-            if (m_DoviMinMasteringLuminance && m_DoviMinMasteringLuminance != m_hdr10.hdr10.MinMasteringLuminance)
-            {
-                m_hdr10.hdr10.MinMasteringLuminance = m_DoviMinMasteringLuminance;
-            }
-        }
-
-        const DXGI_COLOR_SPACE_TYPE colorSpace = DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020;
-
-        if (m_currentSwapChainColorSpace != colorSpace)
-        {
-            if (m_hdr10.bValid)
-            {
-                if (m_bHdrPassthrough)
-                {
-                    hr = m_pDXGISwapChain4->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,
-                                                           sizeof(DXGI_HDR_METADATA_HDR10), &m_hdr10.hdr10);
-                    DLogIf(FAILED(hr), L"CDX11VideoProcessor::Render() : SetHDRMetaData(hdr) failed with error {}",
-                           HR2Str(hr));
-                }
-                else if (m_bHdrLocalToneMapping)
-                {
-                    SetHDR10ShaderParams(
-                        m_hdr10.hdr10.MinMasteringLuminance / 10000.0, m_hdr10.hdr10.MaxMasteringLuminance,
-                        m_hdr10.hdr10.MaxContentLightLevel, m_hdr10.hdr10.MaxFrameAverageLightLevel,
-                        m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
-                }
-                m_lastHdr10 = m_hdr10;
-                UpdateStatsStatic();
-            }
-            else if (m_lastHdr10.bValid)
-            {
-                if (m_bHdrPassthrough)
-                {
-                    hr = m_pDXGISwapChain4->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,
-                                                           sizeof(DXGI_HDR_METADATA_HDR10), &m_lastHdr10.hdr10);
-                    DLogIf(FAILED(hr), L"CDX11VideoProcessor::Render() : SetHDRMetaData(lastHdr) failed with error {}",
-                           HR2Str(hr));
-                }
-                else if (m_bHdrLocalToneMapping)
-                {
-                    SetHDR10ShaderParams(
-                        m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance,
-                        m_lastHdr10.hdr10.MaxContentLightLevel, m_lastHdr10.hdr10.MaxFrameAverageLightLevel,
-                        m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
-                }
-            }
-            else
-            {
-                m_lastHdr10.bValid = true;
-
-                m_lastHdr10.hdr10.RedPrimary[0] = 34000; // Display P3 primaries
-                m_lastHdr10.hdr10.RedPrimary[1] = 16000;
-                m_lastHdr10.hdr10.GreenPrimary[0] = 13250;
-                m_lastHdr10.hdr10.GreenPrimary[1] = 34500;
-                m_lastHdr10.hdr10.BluePrimary[0] = 7500;
-                m_lastHdr10.hdr10.BluePrimary[1] = 3000;
-                m_lastHdr10.hdr10.WhitePoint[0] = 15635;
-                m_lastHdr10.hdr10.WhitePoint[1] = 16450;
-                m_lastHdr10.hdr10.MaxMasteringLuminance = m_DoviMaxMasteringLuminance
-                                                              ? m_DoviMaxMasteringLuminance
-                                                              : 1000; // 1000 nits
-                m_lastHdr10.hdr10.MinMasteringLuminance = m_DoviMinMasteringLuminance
-                                                              ? m_DoviMinMasteringLuminance
-                                                              : 50 * 10000; // 0.005 nits
-
-                if (m_bHdrPassthrough)
-                {
-                    hr = m_pDXGISwapChain4->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,
-                                                           sizeof(DXGI_HDR_METADATA_HDR10), &m_lastHdr10.hdr10);
-                    DLogIf(FAILED(hr),
-                           L"CDX11VideoProcessor::Render() : SetHDRMetaData(Display P3 standard) failed with error {}",
-                           HR2Str(hr));
-                }
-                else if (m_bHdrLocalToneMapping)
-                {
-                    SetHDR10ShaderParams(
-                        m_lastHdr10.hdr10.MinMasteringLuminance / 10000.0, m_lastHdr10.hdr10.MaxMasteringLuminance,
-                        m_lastHdr10.hdr10.MaxContentLightLevel, m_lastHdr10.hdr10.MaxFrameAverageLightLevel,
-                        m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
-                }
-
-                UpdateStatsStatic();
-            }
-
-            UINT colorSpaceSupport = 0;
-            if (SUCCEEDED(m_pDXGISwapChain4->CheckColorSpaceSupport(colorSpace, &colorSpaceSupport))
-                && (colorSpaceSupport & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT) ==
-                DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
-            {
-                hr = m_pDXGISwapChain4->SetColorSpace1(colorSpace);
-                DLogIf(FAILED(hr), L"CDX11VideoProcessor::Render() : SetColorSpace1() failed with error {}",
-                       HR2Str(hr));
-                if (SUCCEEDED(hr))
-                {
-                    m_currentSwapChainColorSpace = colorSpace;
-                }
-            }
-        }
-        else if (m_hdr10.bValid)
-        {
-            if (memcmp(&m_hdr10.hdr10, &m_lastHdr10.hdr10, sizeof(m_hdr10.hdr10)) != 0)
-            {
-                if (m_bHdrPassthrough)
-                {
-                    hr = m_pDXGISwapChain4->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,
-                                                           sizeof(DXGI_HDR_METADATA_HDR10), &m_hdr10.hdr10);
-                    DLogIf(FAILED(hr), L"CDX11VideoProcessor::Render() : SetHDRMetaData(hdr) failed with error {}",
-                           HR2Str(hr));
-                }
-                else if (m_bHdrLocalToneMapping)
-                {
-                    SetHDR10ShaderParams(
-                        m_hdr10.hdr10.MinMasteringLuminance / 10000.0, m_hdr10.hdr10.MaxMasteringLuminance,
-                        m_hdr10.hdr10.MaxContentLightLevel, m_hdr10.hdr10.MaxFrameAverageLightLevel,
-                        m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
-                }
-                m_lastHdr10 = m_hdr10;
-                UpdateStatsStatic();
-            }
-        }
-    }
-
-    if (m_bVBlankBeforePresent && m_pDXGIOutput)
-    {
-        hr = m_pDXGIOutput->WaitForVBlank();
-        DLogIf(FAILED(hr), L"WaitForVBlank failed with error {}", HR2Str(hr));
-    }
-
-    if (m_bAdjustPresentTime)
-    {
-        SyncFrameToStreamTime(frameStartTime);
-    }
-
-    g_bPresent = true;
-    hr = m_pDXGISwapChain1->Present(1, 0);
-    g_bPresent = false;
-    DLogIf(FAILED(hr), L"CDX11VideoProcessor::Render() : Present() failed with error {}", HR2Str(hr));
-
-    m_RenderStats.presentticks = GetPreciseTick() - tick3;
-
-    if (hr == DXGI_ERROR_INVALID_CALL && m_pFilter->m_bIsD3DFullscreen)
-    {
-        InitSwapChain(false);
-    }
 
     return hr;
 }

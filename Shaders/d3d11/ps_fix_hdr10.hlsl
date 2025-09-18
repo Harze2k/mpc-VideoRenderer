@@ -59,11 +59,20 @@ float3 EnhancedACESTonemap(float3 color) {
     const float c = 2.2f;   // Earlier highlight rolloff
     const float d = 0.7f;   // Smoother highlights
     const float e = 0.08f;  // Better black point
+    // ACES-like curve parameters
+    //const float a = 2.51f;
+    //const float b = 0.03f;
+    //const float c = 2.43f;
+    //const float d = 0.59f;
+    //const float e = 0.14f;
     
     float3 result = (color * (a * color + b)) / (color * (c * color + d) + e);
     
     // Post-exposure compensation
-    result *= 1.2f;
+    float max_c = max(result.r, max(result.g, result.b));
+        if (max_c > 1.0) {
+            result /= max_c;
+        }
     
     return saturate(result);
 }
@@ -118,7 +127,7 @@ float4 main(PS_INPUT input) : SV_Target {
     uint sel = selection;
     sel = (sel < 1u || sel > 5u) ? 1u : sel; // sanitize: default to ACES
 
-    switch (sel) {
+    [unroll] switch (sel) {
     case 5u: // Enhanced ACES
         toneMapped = EnhancedACESTonemap(linearColor.rgb);
         break;
