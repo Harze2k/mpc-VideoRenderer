@@ -45,7 +45,7 @@ protected:
 	long m_nRefCount = 1;
 	CMpcVideoRenderer* m_pFilter = nullptr;
 
-	// Settings
+	//Settings
 	bool m_bShowStats                      = false;
 	int  m_iResizeStats                    = 0;
 	int  m_iTexFormat                      = TEXFMT_AUTOINT;

@@ -24,7 +24,7 @@
 
 #define TEST_SHADER 0
 
-// Added enum class definition for tracking HDR state.
+//Added enum class definition for tracking HDR state.
 enum class HdrMode { UNKNOWN, SDR, HDR };
 
 class CVideoRendererInputPin;

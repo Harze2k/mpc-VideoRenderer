@@ -115,7 +115,7 @@ struct VERTEX {
 };
 
 struct PS_EXTSHADER_CONSTANTS {
-	DirectX::XMFLOAT2 pxy; // pixel size in normalized coordinates
+	DirectX::XMFLOAT2 pxy; //pixel size in normalized coordinates
 	DirectX::XMFLOAT2 wh;  // width and height of texture
 	uint32_t counter;      // rendered frame counter
 	float clock;           // some time in seconds
