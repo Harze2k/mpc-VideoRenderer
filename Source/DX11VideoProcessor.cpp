@@ -985,51 +985,44 @@ void CDX11VideoProcessor::SetShaderLuminanceParams()
     }
 }
 // 16-byte aligned upload layout for ps_fix_hdr10.hlsl cbuffer(b0)
-struct HDR10Params {
+struct HDR10ParamsCB {
     float MasteringMinLuminanceNits;
     float MasteringMaxLuminanceNits;
-    float maxCLL;
-    float maxFALL;
-    float displayMaxNits;
-    UINT  selection;     // must be UINT to match HLSL 'uint selection'
-    float reserved1;
-    float reserved2;
+    float MaxCLL;
+    float MaxFALL;
+    float DisplayMaxNits;
+    UINT  Selection;     // HLSL 'uint selection'
+    float Reserved1;
+    float Reserved2;
 };
-static_assert(sizeof(HDR10Params) % 16 == 0, "cb size must be 16-byte aligned");
+static_assert(sizeof(HDR10ParamsCB) % 16 == 0, "cb size must be 16-byte aligned");
 
 void CDX11VideoProcessor::SetHDR10ShaderParams(float masteringMinLuminanceNits, float masteringMaxLuminanceNits,
                                                float maxCLL, float maxFALL, float displayMaxNits, int toneMappingType)
 {
-    if (masteringMinLuminanceNits <= 0) masteringMinLuminanceNits = 0;
+    if (masteringMinLuminanceNits < 0) masteringMinLuminanceNits = 0;
     if (masteringMaxLuminanceNits <= 0) masteringMaxLuminanceNits = 1000.0f;
     if (maxCLL <= 0) maxCLL = 1000.0f;
     if (maxFALL <= 0) maxFALL = maxCLL;
     if (displayMaxNits < 1.0f || displayMaxNits > 10000.0f) displayMaxNits = 1000.0f;
-    if (toneMappingType < 1 || toneMappingType > 5) toneMappingType = 1; // Fallback to ACES, not ACEScg for safety
+    if (toneMappingType < 1 || toneMappingType > 5) toneMappingType = 1;
 
-    DLog(L"SetHDR10ShaderParams: type={}, displayMaxNits={:.1f}", toneMappingType, displayMaxNits);
-
-    HDR10Params cb = {
-        masteringMinLuminanceNits,
-        masteringMaxLuminanceNits,
-        maxCLL,
-        maxFALL,
-        displayMaxNits,
-        (UINT)toneMappingType,
-        0.0f, 0.0f
+    HDR10ParamsCB cb = {
+        masteringMinLuminanceNits, masteringMaxLuminanceNits,
+        maxCLL, maxFALL, displayMaxNits, (UINT)toneMappingType, 0.0f, 0.0f
     };
 
     if (m_pHDR10ToneMappingConstants) {
         m_pDeviceContext->UpdateSubresource(m_pHDR10ToneMappingConstants, 0, nullptr, &cb, 0, 0);
     } else {
         D3D11_BUFFER_DESC bd = {};
-        bd.ByteWidth = (UINT)((sizeof(HDR10Params) + 15) & ~15);
+        bd.ByteWidth = (UINT)((sizeof(HDR10ParamsCB) + 15) & ~15);
         bd.Usage = D3D11_USAGE_DEFAULT;
         bd.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
         D3D11_SUBRESOURCE_DATA init = { &cb, 0, 0 };
-        HRESULT hr2 = m_pDevice->CreateBuffer(&bd, &init, &m_pHDR10ToneMappingConstants);
-        if (FAILED(hr2)) {
-            DLog(L"SetHDR10ShaderParams() failed CreateBuffer: {}", HR2Str(hr2));
+        const HRESULT hr = m_pDevice->CreateBuffer(&bd, &init, &m_pHDR10ToneMappingConstants);
+        if (FAILED(hr)) {
+            DLog(L"SetHDR10ShaderParams() failed CreateBuffer: {}", HR2Str(hr));
         }
     }
 }
@@ -2374,49 +2367,49 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     m_hdr10 = {};
     m_Dovi.bValid = false; // Ensure DoVi is reset for every sample initially
 
-    if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
-    {
+    //if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
+    //{
         // Read HDR side-data UNCONDITIONALLY so auto-swap can detect HDR while we’re still in SDR mode.
-        {
-            MediaSideDataHDR* hdr = nullptr;
-            size_t size = 0;
-            hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &size);
-            if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDR)) {
-                m_hdr10.timestamp = tick;
-                m_hdr10.bValid = true;
-                updateStats = true;
+        //{
+        MediaSideDataHDR* hdr = nullptr;
+        size_t size = 0;
+        hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &size);
+        if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDR)) {
+            m_hdr10.timestamp = tick;
+            m_hdr10.bValid = true;
+            updateStats = true;
 
-                // fill m_hdr10 fields exactly as before...
-                const auto& primaries_x = hdr->display_primaries_x;
-                const auto& primaries_y = hdr->display_primaries_y;
-                if (primaries_x[0] > 0. && primaries_x[1] > 0. && primaries_x[2] > 0.
-                 && primaries_y[0] > 0. && primaries_y[1] > 0. && primaries_y[2] > 0.
-                 && hdr->white_point_x > 0. && hdr->white_point_y > 0.
-                 && hdr->max_display_mastering_luminance > 0. && hdr->min_display_mastering_luminance >= 0.)
-                {
-                    m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(primaries_x[2] * 50000.0));
-                    m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(primaries_y[2] * 50000.0));
-                    m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[0] * 50000.0));
-                    m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[0] * 50000.0));
-                    m_hdr10.hdr10.BluePrimary[0] = static_cast<UINT16>(std::lround(primaries_x[1] * 50000.0));
-                    m_hdr10.hdr10.BluePrimary[1] = static_cast<UINT16>(std::lround(primaries_y[1] * 50000.0));
-                    m_hdr10.hdr10.WhitePoint[0] = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
-                    m_hdr10.hdr10.WhitePoint[1] = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
-
-                    m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
-                    m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
-                }
-            }
-
-            MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
-            size = 0;
-            hr = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel, (const BYTE**)&hdrCLL, &size);
-            if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDRContentLightLevel))
+            // fill m_hdr10 fields exactly as before...
+            const auto& primaries_x = hdr->display_primaries_x;
+            const auto& primaries_y = hdr->display_primaries_y;
+            if (primaries_x[0] > 0. && primaries_x[1] > 0. && primaries_x[2] > 0.
+             && primaries_y[0] > 0. && primaries_y[1] > 0. && primaries_y[2] > 0.
+             && hdr->white_point_x > 0. && hdr->white_point_y > 0.
+             && hdr->max_display_mastering_luminance > 0. && hdr->min_display_mastering_luminance >= 0.)
             {
-                m_hdr10.hdr10.MaxContentLightLevel = hdrCLL->MaxCLL;
-                m_hdr10.hdr10.MaxFrameAverageLightLevel = hdrCLL->MaxFALL;
+                m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(primaries_x[2] * 50000.0));
+                m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(primaries_y[2] * 50000.0));
+                m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[0] * 50000.0));
+                m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[0] * 50000.0));
+                m_hdr10.hdr10.BluePrimary[0] = static_cast<UINT16>(std::lround(primaries_x[1] * 50000.0));
+                m_hdr10.hdr10.BluePrimary[1] = static_cast<UINT16>(std::lround(primaries_y[1] * 50000.0));
+                m_hdr10.hdr10.WhitePoint[0] = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
+                m_hdr10.hdr10.WhitePoint[1] = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
+
+                m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
+                m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
             }
         }
+
+        MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
+        size = 0;
+        hr = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel, (const BYTE**)&hdrCLL, &size);
+        if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDRContentLightLevel))
+        {
+            m_hdr10.hdr10.MaxContentLightLevel = hdrCLL->MaxCLL;
+            m_hdr10.hdr10.MaxFrameAverageLightLevel = hdrCLL->MaxFALL;
+        }
+        
 
         size_t size = 0;
         MediaSideData3DOffset* offset = nullptr;
@@ -2550,7 +2543,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
                 }
             }
         }
-    }
+    //}
 
 
     // ---- START OF NEW LOGIC ----
@@ -4283,16 +4276,15 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
         m_iHdrLocalToneMappingType = config.iHdrLocalToneMappingType;
         m_fHdrDisplayMaxNits = config.fHdrDisplayMaxNits;
         
-        // Force recreation of HDR tone mapping shader and constants
         if (m_bHdrSupport && m_bHdrLocalToneMapping && SourceIsHDR())
+        {
+            EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
+            SetHDR10ShaderParams(0, 0, 0, 0, m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+        }
+        else
         {
             m_pPSHDR10ToneMapping.Release();
             m_pHDR10ToneMappingConstants.Release();
-            
-            EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
-            DLog(L"CDX11VideoProcessor::Configure() m_pPSHDR10ToneMapping recreated for type: %d", m_iHdrLocalToneMappingType);
-            
-            SetHDR10ShaderParams(0, 0, 0, 0, m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
         }
         
         changeHDR = true;  // Make sure this triggers a full HDR change
@@ -4373,8 +4365,8 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
 
     if (changeHDR)
     {
-        if (SourceIsPQorHLG() || m_bVPUseRTXVideoHDR || m_bVPRTXVideoHDR || m_iHdrToggleDisplay)
-        {
+        //if (SourceIsPQorHLG() || m_bVPUseRTXVideoHDR || m_bVPRTXVideoHDR || m_iHdrToggleDisplay)
+        //{
             if (m_iSwapEffect == SWAPEFFECT_Discard)
             {
                 ReleaseSwapChain();
@@ -4385,7 +4377,7 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
             InitMediaType(&m_pFilter->m_inputMT);
             InitSwapChain(false);
             return;
-        }
+       // }
     }
 
     if (m_Dovi.bValid)
