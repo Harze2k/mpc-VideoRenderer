@@ -576,44 +576,21 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
             {
                 AutoSwapLog(L"PropPage: user changed HDR combo, idx=%ld",
                             (long)SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0));
-                lValue = SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0);
-                switch (lValue)
-                {
-                case 0:
+                lValue = ComboBox_GetCurItemData(m_hWnd, IDC_COMBO9); // Use item data instead of index
+                
+                if (lValue == -1) {
+                    // "Ignore" option
                     m_SetsPP.bHdrPassthrough = false;
                     m_SetsPP.bHdrLocalToneMapping = false;
-                    break;
-                case 1:
+                } else if (lValue == 0) {
+                    // "Passthrough" option  
                     m_SetsPP.bHdrPassthrough = true;
                     m_SetsPP.bHdrLocalToneMapping = false;
-                    break;
-                case 2:
+                } else {
+                    // Local tone mapping options (1-5)
                     m_SetsPP.bHdrPassthrough = false;
                     m_SetsPP.bHdrLocalToneMapping = true;
-                    m_SetsPP.iHdrLocalToneMappingType = 1; // ACES
-                    break;
-                case 3:
-                    m_SetsPP.bHdrPassthrough = false;
-                    m_SetsPP.bHdrLocalToneMapping = true;
-                    m_SetsPP.iHdrLocalToneMappingType = 2; // Reinhard
-                    break;
-                case 4:
-                    m_SetsPP.bHdrPassthrough = false;
-                    m_SetsPP.bHdrLocalToneMapping = true;
-                    m_SetsPP.iHdrLocalToneMappingType = 3; // Hable
-                    break;
-                case 5:
-                    m_SetsPP.bHdrPassthrough = false;
-                    m_SetsPP.bHdrLocalToneMapping = true;
-                    m_SetsPP.iHdrLocalToneMappingType = 4; // Möbius
-                    break;
-                case 6: // New ACEScg option
-                    m_SetsPP.bHdrPassthrough = false;
-                    m_SetsPP.bHdrLocalToneMapping = true;
-                    m_SetsPP.iHdrLocalToneMappingType = 5; // ACEScg
-                    break;
-                default:
-                    break;
+                    m_SetsPP.iHdrLocalToneMappingType = (int)lValue;
                 }
                 SetDirty();
                 EnableControls();
