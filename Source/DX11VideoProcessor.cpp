@@ -995,7 +995,7 @@ struct HDR10ParamsCB
     float MaxCLL;
     float MaxFALL;
     float DisplayMaxNits;
-    UINT Selection; // note: UINT (integer)
+    UINT  Selection;
     float Reserved1;
     float Reserved2;
 };

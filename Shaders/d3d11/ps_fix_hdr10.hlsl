@@ -12,14 +12,14 @@ struct PS_INPUT
 // HDR10 tone mapping params (dedicated slot to avoid clashes with other passes)
 cbuffer HDR10ParamsCB : register(b0)
 {
-    float MasteringMinLuminanceNits;
-    float MasteringMaxLuminanceNits;
-    float MaxCLL;
-    float MaxFALL;
-    float DisplayMaxNits;
-    uint  Selection;   // note: UINT (integer)
-    float Reserved1;
-    float Reserved2;
+    float masteringMinLuminanceNits;
+    float masteringMaxLuminanceNits;
+    float maxCLL;
+    float maxFALL;
+    float displayMaxNits; // <- lowercase to match uses
+    uint  selection;      // <- lowercase to match uses
+    float reserved1;
+    float reserved2;
 }
 
 // Standard ACES RRT + ODT Implementation
