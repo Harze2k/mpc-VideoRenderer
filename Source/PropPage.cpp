@@ -1,3 +1,13 @@
+
+
+if (uMsg == WM_MVR_HDR_AUTOSWAP_UI) {
+    if (m_pVideoRenderer) {
+        m_pVideoRenderer->GetSettings(m_SetsPP);
+        SetControls();
+    }
+    AutoSwapLog(L"PropPage: UI refresh due to auto-swap message");
+    return (LRESULT)1;
+}
 /*
  * (C) 2018-2024 see Authors.txt
  *
@@ -19,6 +29,7 @@
  */
 
 #include "stdafx.h"
+#include "VideoRenderer.h"
 #include "resource.h"
 #include "Helper.h"
 #include "DisplayConfig.h"
@@ -65,6 +76,8 @@ void ComboBox_SelectByItemData(HWND hWnd, int nIDComboBox, LONG_PTR data)
 	}
 }
 
+
+static UINT WM_MVR_HDR_AUTOSWAP_UI = RegisterWindowMessageW(L"MVR_HDR_AUTOSWAP_UI");
 
 // CVRMainPPage
 
@@ -299,6 +312,12 @@ HRESULT CVRMainPPage::OnActivate()
 
 INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 {
+	if (uMsg == WM_MVR_HDR_AUTOSWAP_UI) {
+		if (m_pVideoRenderer) { m_pVideoRenderer->GetSettings(m_SetsPP); SetControls(); }
+		AutoSwapLog(L"PropPage: UI refresh due to auto-swap message");
+		return (LRESULT)1;
+	}
+
 	if (uMsg == WM_COMMAND) {
 		LRESULT lValue;
 		const int nID = LOWORD(wParam);
@@ -477,6 +496,7 @@ INT_PTR CVRMainPPage::OnReceiveMessage(HWND hwnd, UINT uMsg, WPARAM wParam, LPAR
 				return (LRESULT)1;
 			}
 			if (nID == IDC_COMBO9) {
+				AutoSwapLog(L"PropPage: user changed HDR combo, idx=%ld", (long)SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0));
 				lValue = SendDlgItemMessageW(IDC_COMBO9, CB_GETCURSEL, 0, 0);
 				switch (lValue) {
 				case 0:

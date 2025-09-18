@@ -20,6 +20,11 @@
 
 #pragma once
 
+// --- Auto-swap logging & UI message ---
+void AutoSwapLog(const wchar_t* fmt, ...);
+unsigned int GetAutoSwapUiMsg();
+
+
 #include <mfidl.h>
 #include <dxva2api.h>
 #include <thread>

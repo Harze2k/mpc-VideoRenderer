@@ -1626,6 +1626,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 
 	ReleaseVP();
 	m_activeHdrMode = HdrMode::UNKNOWN; // Reset on every init
+	AutoSwapLog(L\"InitMediaType: reset activeHdr; settings pass=%d localTM=%d type=%d\", (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
 
 	auto FmtParams = GetFmtConvParams(pmt);
 
@@ -1840,6 +1841,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 
 		const auto bHdrOutput = m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping) && (SourceIsHDR() || m_bVPUseRTXVideoHDR);
 		m_activeHdrMode = bHdrOutput ? HdrMode::HDR : HdrMode::SDR;
+	AutoSwapLog(L\"InitMediaType: pipeline set to %s (bHdrOutput=%d; TF=%d)\", (m_activeHdrMode==HdrMode::HDR?L\"HDR\":L\"SDR\"), (int)bHdrOutput, (int)m_srcExFmt.VideoTransferFunction);
 		DLog(L"CDX11VideoProcessor::InitMediaType() - Pipeline configured for: %s", (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"));
 
 		return TRUE;
@@ -2272,47 +2274,61 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
 		}
 	}
 	
-	// ---- START OF NEW LOGIC ----
+	
+// ---- START OF NEW LOGIC ----
+    // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
+    const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) || (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_HLG);
+    const bool sideDataHDR = (m_hdr10.bValid || m_Dovi.bValid);
+    const bool detectedHDR = srcTFisHDR || sideDataHDR;
+    AutoSwapLog(L"CopySample: srcTFisHDR=%d sideDataHDR=%d (TF=%d), settings: pass=%d localTM=%d type=%d", 
+        (int)srcTFisHDR, (int)sideDataHDR, (int)m_srcExFmt.VideoTransferFunction, (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
+
+    // If current settings don't match content, apply and re-init
+    bool needSwap = false;
+    Settings_t curSets; m_pFilter->GetSettings(curSets);
+    if (!detectedHDR) {
+        // SDR -> enforce passthrough
+        if (!curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping) needSwap = true;
+    } else {
+        // HDR -> enforce Local: ACES
+        if (!curSets.bHdrLocalToneMapping || curSets.iHdrLocalToneMappingType != 1 || curSets.bHdrPassthrough) needSwap = true;
+    }
+
+    if (needSwap) {
+        AutoSwapLog(L\"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d\", detectedHDR?L\"HDR\":L\"SDR\", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
+        if (!detectedHDR) {
+            curSets.bHdrPassthrough = true;
+            curSets.bHdrLocalToneMapping = false;
+        } else {
+            curSets.bHdrPassthrough = false;
+            curSets.bHdrLocalToneMapping = true;
+            curSets.iHdrLocalToneMappingType = 1; // ACES
+        }
+        m_pFilter->SetSettings(curSets);
+        AutoSwapLog(L\"CopySample: Settings applied. New: pass=%d localTM=%d type=%d\", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
+        // Notify UI if open
+        PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
+        // Force graph to rebuild
+        m_activeHdrMode = HdrMode::UNKNOWN;
+        m_pFilter->TriggerMediaTypeChange();
+        AutoSwapLog(L\"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline\");
+        return E_ABORT;
+    }
+
     if (m_activeHdrMode != HdrMode::UNKNOWN)
     {
-        HdrMode detectedMode = (m_hdr10.bValid || m_Dovi.bValid) ? HdrMode::HDR : HdrMode::SDR;
+        HdrMode detectedMode = detectedHDR ? HdrMode::HDR : HdrMode::SDR;
         if (m_activeHdrMode != detectedMode)
         {
-			DLog(L"CDX11VideoProcessor::CopySample() - Mismatch! Pipeline is %s but content is %s. Triggering re-init.",
-				(m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"),
-				(detectedMode == HdrMode::HDR ? L"HDR" : L"SDR"));
-
-
-			// Auto-swap renderer selection based on first-frame HDR presence.
-			// If we detected SDR: force "Passthrough to display" (combo item data 0).
-			// If we detected HDR: force "Local: ACES" (combo item data 1).
-			if (auto pFilter = m_pFilter) {
-				Settings_t curSets;
-				pFilter->GetSettings(curSets);
-				if (detectedMode == HdrMode::SDR) {
-					// SDR: passthrough on, local tone mapping off.
-					if (!curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping) {
-						curSets.bHdrPassthrough = true;
-						curSets.bHdrLocalToneMapping = false;
-						// Keep last mapping type but it's irrelevant in SDR; don't persist change unless needed.
-						pFilter->SetSettings(curSets);
-						DLog(L"Applied SDR auto-swap: Passthrough to display.");
-					}
-				} else { // HDR detected
-					// HDR: default to Local: ACES (type == 1)
-					if (!curSets.bHdrLocalToneMapping || curSets.iHdrLocalToneMappingType != 1 || curSets.bHdrPassthrough) {
-						curSets.bHdrPassthrough = false;
-						curSets.bHdrLocalToneMapping = true;
-						curSets.iHdrLocalToneMappingType = 1;
-						pFilter->SetSettings(curSets);
-						DLog(L"Applied HDR auto-swap: Local: ACES.");
-					}
-				}
-			}
-			// Set to UNKNOWN to prevent triggering on every subsequent frame before re-init completes.
-			m_activeHdrMode = HdrMode::UNKNOWN;
-			m_pFilter->TriggerMediaTypeChange();
-			return E_ABORT; // Abort processing this frame, the pipeline will be rebuilt.
+            DLog(L\"CDX11VideoProcessor::CopySample() - Mismatch! Pipeline is %s but content is %s. Triggering re-init.\",
+                (m_activeHdrMode == HdrMode::HDR ? L\"HDR\" : L\"SDR\"),
+                (detectedMode == HdrMode::HDR ? L\"HDR\" : L\"SDR\"));
+            AutoSwapLog(L\"CopySample: Pipeline/content mismatch: pipeline=%s content=%s\", m_activeHdrMode==HdrMode::HDR?L\"HDR\":L\"SDR\", detectedHDR?L\"HDR\":L\"SDR\");
+// Set to UNKNOWN
+ to prevent triggering on every subsequent frame before re-init completes.
+            m_activeHdrMode = HdrMode::UNKNOWN;
+            m_pFilter->TriggerMediaTypeChange();
+            return E_ABORT; // Abort processing this frame, the pipeline will be rebuilt.
         }
     }
 
