@@ -1,24 +1,3 @@
-// === Simplified ACEScg approach ===
-// Use a simplified, safer ACEScg approximation to avoid matrix issues
-float3 toACEScg(float3 rgb2020) { 
-    // Simplified transform - less accurate but safer
-    rgb2020 = saturate(rgb2020);
-    return rgb2020 * 0.95f; // Scale down slightly for ACEScg working space
-}
-
-float3 fromACEScg(float3 rgbACES) { 
-    // Inverse of simplified transform
-    rgbACES = saturate(rgbACES);
-    return rgbACES / 0.95f; // Scale back up
-}
-
-// Simplified ACEScg filmic curve
-float3 ACEScgFilmicCurve(float3 x) {
-    // Use the same constants as the main ACES curve for consistency
-    const float a = 2.51, b = 0.03, c = 2.43, d = 0.59, e = 0.14;
-    return saturate((x * (a * x + b)) / (x * (c * x + d) + e));
-}
-
 #include "../convert/st2084.hlsl"
 
 Texture2D tex : register(t0);
@@ -45,7 +24,7 @@ cbuffer RootConstants : register(b0)
 // ACES RRT + ODT Implementation
 float3 RRTAndODTFit(float3 color) {
     const float A = 2.51f, B = 0.03f, C = 2.43f, D = 0.59f, E = 0.14f;
-    return (color * (A * color + B)) / (color * (C * color + D) + E);
+    return saturate((color * (A * color + B)) / (color * (C * color + D) + E));
 }
 
 float3 ACESFilmTonemap(float3 color) {
@@ -67,72 +46,86 @@ float3 MobiusTonemap(float3 color) {
     return color / (1.0 + color / (maxL + epsilon));
 }
 
-// ACEScg tone mapping with proper color space handling
+// Improved ACEScg tone mapping
 float3 ACEScgTonemap(float3 color) {
-    // Clamp input to prevent NaN/Inf issues
+    // Ensure no negative values
     color = max(color, 0.0f);
     
-    // Convert to ACEScg color space
-    float3 acescg = toACEScg(color);
+    // Simple but effective ACEScg-inspired tone mapping
+    // Based on ACES but with adjustments for the ACEScg color space
+    const float a = 2.8f;   // Slightly higher contrast
+    const float b = 0.02f;  // Lower toe
+    const float c = 2.6f;   // Adjusted shoulder start
+    const float d = 0.8f;   // Higher shoulder
+    const float e = 0.1f;   // Lower black point
     
-    // Clamp after conversion to prevent issues
-    acescg = max(acescg, 0.0f);
-    
-    // Apply filmic curve optimized for ACEScg
-    acescg = ACEScgFilmicCurve(acescg);
-    
-    // Convert back to Rec.2020
-    float3 result = fromACEScg(acescg);
-    
-    // Final safety clamp
-    return max(result, 0.0f);
+    float3 result = (color * (a * color + b)) / (color * (c * color + d) + e);
+    return saturate(result);
 }
 
 float4 main(PS_INPUT input) : SV_Target {
     // Sample texture and convert from PQ to linear
     float4 color = tex.Sample(samp, input.Tex);
+    
+    // Safety check for invalid input
+    if (any(isnan(color.rgb)) || any(isinf(color.rgb))) {
+        return float4(0.0f, 0.0f, 0.0f, color.a);
+    }
+    
     color = ST2084ToLinear(color, 10000.0f);
+    
+    // Safety clamp after PQ conversion
+    color.rgb = max(color.rgb, 0.0f);
 
-    // Determine effective peak luminance
-    float effectiveMaxLum = MasteringMaxLuminanceNits;
-    if (maxCLL > 0.0 && maxCLL <= MasteringMaxLuminanceNits) {
+    // Determine effective peak luminance with better defaults
+    float effectiveMaxLum = max(MasteringMaxLuminanceNits, 1000.0f);
+    if (maxCLL > 100.0f && maxCLL <= MasteringMaxLuminanceNits) {
         effectiveMaxLum = maxCLL;
     }
     
-    // Global normalization before tone mapping
-    effectiveMaxLum = max(effectiveMaxLum, 400.0f);
-    color.rgb *= (1.0f / effectiveMaxLum);
+    // Normalize to [0,1] range for tone mapping
+    color.rgb /= effectiveMaxLum;
+    
+    // Soft clamp for values above 1.0
     float3 over = max(color.rgb - 1.0f, 0.0f);
-    color.rgb = color.rgb - over + over / (1.0f + 0.25f * over);
-    color.rgb = saturate(color.rgb);
-
+    color.rgb = color.rgb - over + over / (1.0f + over);
+    
     // Apply tone mapping based on selection
-    if (selection == 1) {
+    if (selection == 5) {
+        // ACEScg tone mapping
+        color.rgb = ACEScgTonemap(color.rgb);
+    }
+    else if (selection == 1) {
+        // ACES tone mapping  
         color.rgb = ACESFilmTonemap(color.rgb);
     }
     else if (selection == 2) {
+        // Reinhard tone mapping
         color.rgb = ReinhardTonemap(color.rgb);
     }
     else if (selection == 3) {
+        // Habel tone mapping
         color.rgb = HabelTonemap(color.rgb);
     }
     else if (selection == 4) {
+        // Möbius tone mapping
         color.rgb = MobiusTonemap(color.rgb);
     }
-    else if (selection == 5) {
-        color.rgb = ACEScgTonemap(color.rgb);
-    }
     else {
-        color.rgb = ACESFilmTonemap(color.rgb); // Default fallback
+        // Default to ACES
+        color.rgb = ACESFilmTonemap(color.rgb);
     }
 
-    // Scale to display peak brightness (skip for Möbius as it scales internally)
+    // Scale to display peak brightness (skip for Möbius as it handles this internally)
     if (selection != 4) {
-        color.rgb *= displayMaxNits;
+        color.rgb *= max(displayMaxNits, 100.0f);
     }
+
+    // Final safety clamp before PQ conversion
+    color.rgb = max(color.rgb, 0.0f);
 
     // Convert back from linear to PQ
     color = LinearToST2084(color, 10000.0f);
 
-    return float4(color.rgb, color.a);
+    return color;
 }

@@ -2638,13 +2638,14 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     // ---- START OF NEW LOGIC ----
     // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
     // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
-    const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) || (m_srcExFmt.
-        VideoTransferFunction == MFVideoTransFunc_HLG);
+        const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) || 
+                            (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_HLG);
     const bool sideDataHDR = (m_hdr10.bValid || m_Dovi.bValid);
     const bool detectedHDR = srcTFisHDR || sideDataHDR;
+    
     AutoSwapLog(L"CopySample: srcTFisHDR=%d sideDataHDR=%d (TF=%d), settings: pass=%d localTM=%d type=%d",
-                (int)srcTFisHDR, (int)sideDataHDR, (int)m_srcExFmt.VideoTransferFunction, (int)m_bHdrPassthrough,
-                (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
+                (int)srcTFisHDR, (int)sideDataHDR, (int)m_srcExFmt.VideoTransferFunction, 
+                (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
 
     // Get current settings and determine if swap is needed
     Settings_t curSets;
@@ -2653,13 +2654,14 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     // Determine what the ideal settings should be for this content
     bool idealPassthrough = false;
     bool idealLocalTM = false;
-    int idealType = 1; // ACES
+    int idealType = 1; // Default to ACES
     float idealMaxNits = 1000.0f;
     
     if (!detectedHDR) {
         // SDR content: use "Ignore" mode
         idealPassthrough = false;
         idealLocalTM = false;
+        idealType = curSets.iHdrLocalToneMappingType; // Keep current type
         idealMaxNits = 400.0f;
     } else {
         // HDR content: use ACEScg local tone mapping
@@ -2669,34 +2671,45 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         idealMaxNits = 1000.0f;
     }
     
-    // Check if current settings match ideal settings
-    bool needSwap = (curSets.bHdrPassthrough != idealPassthrough) ||
-                    (curSets.bHdrLocalToneMapping != idealLocalTM) ||
-                    (idealLocalTM && curSets.iHdrLocalToneMappingType != idealType) ||
-                    (abs(curSets.fHdrDisplayMaxNits - idealMaxNits) > 1.0f);
+    // Check if current settings match ideal settings  
+    bool needSwap = false;
+    
+    if (!detectedHDR) {
+        // For SDR content, only swap if currently using HDR processing
+        needSwap = (curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping);
+    } else {
+        // For HDR content, swap if not using ACEScg local tone mapping
+        needSwap = (!curSets.bHdrLocalToneMapping) || 
+                   (curSets.bHdrPassthrough) ||
+                   (curSets.iHdrLocalToneMappingType != 5);
+    }
                     
     if (needSwap) {
-        AutoSwapLog(L"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d maxNits=%.1f", 
-            detectedHDR?L"HDR":L"SDR", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType, curSets.fHdrDisplayMaxNits);
+        AutoSwapLog(L"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d maxNits=%.1f -> ideal: pass=%d localTM=%d type=%d maxNits=%.1f", 
+            detectedHDR ? L"HDR" : L"SDR", 
+            (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType, curSets.fHdrDisplayMaxNits,
+            (int)idealPassthrough, (int)idealLocalTM, idealType, idealMaxNits);
         
-        // Apply ideal settings
-        curSets.bHdrPassthrough = idealPassthrough;
-        curSets.bHdrLocalToneMapping = idealLocalTM;
-        curSets.iHdrLocalToneMappingType = idealType;
-        curSets.fHdrDisplayMaxNits = idealMaxNits;
-        
-        m_pFilter->SetSettings(curSets);
-        AutoSwapLog(L"CopySample: Settings applied. New: pass=%d localTM=%d type=%d maxNits=%.1f", 
-            (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType, curSets.fHdrDisplayMaxNits);
-        
-        // Notify UI if open
-        PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
-        
-        // Force graph to rebuild
-        m_activeHdrMode = HdrMode::UNKNOWN;
-        m_pFilter->TriggerMediaTypeChange();
-        AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
-        return E_ABORT;
+            // Apply ideal settings
+            curSets.bHdrPassthrough = idealPassthrough;
+            curSets.bHdrLocalToneMapping = idealLocalTM;
+            if (idealLocalTM) {
+                curSets.iHdrLocalToneMappingType = idealType;
+            }
+            curSets.fHdrDisplayMaxNits = idealMaxNits;
+            
+            m_pFilter->SetSettings(curSets);
+            AutoSwapLog(L"CopySample: Settings applied. New: pass=%d localTM=%d type=%d maxNits=%.1f", 
+                (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType, curSets.fHdrDisplayMaxNits);
+            
+            // Notify UI if open
+            PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
+            
+            // Force graph to rebuild
+            m_activeHdrMode = HdrMode::UNKNOWN;
+            m_pFilter->TriggerMediaTypeChange();
+            AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
+            return E_ABORT;
     }
 
     if (m_activeHdrMode != HdrMode::UNKNOWN)
@@ -4324,11 +4337,26 @@ void CDX11VideoProcessor::Configure(const Settings_t& config)
     }
 
     if (config.bHdrLocalToneMapping != m_bHdrLocalToneMapping ||
-        config.iHdrLocalToneMappingType != m_iHdrLocalToneMappingType)
+        config.iHdrLocalToneMappingType != m_iHdrLocalToneMappingType ||
+        config.fHdrDisplayMaxNits != m_fHdrDisplayMaxNits)
     {
         m_bHdrLocalToneMapping = config.bHdrLocalToneMapping;
         m_iHdrLocalToneMappingType = config.iHdrLocalToneMappingType;
-        changeHDR = true;
+        m_fHdrDisplayMaxNits = config.fHdrDisplayMaxNits;
+        
+        // Force recreation of HDR tone mapping shader and constants
+        if (m_bHdrSupport && m_bHdrLocalToneMapping && SourceIsHDR())
+        {
+            m_pPSHDR10ToneMapping.Release();
+            m_pHDR10ToneMappingConstants.Release();
+            
+            EXECUTE_ASSERT(S_OK == CreatePShaderFromResource(&m_pPSHDR10ToneMapping, IDF_PS_11_FIX_HDR10));
+            DLog(L"CDX11VideoProcessor::Configure() m_pPSHDR10ToneMapping recreated for type: %d", m_iHdrLocalToneMappingType);
+            
+            SetHDR10ShaderParams(0, 0, 0, 0, m_fHdrDisplayMaxNits, m_iHdrLocalToneMappingType);
+        }
+        
+        changeHDR = true;  // Make sure this triggers a full HDR change
     }
 
     if (config.fHdrDisplayMaxNits != m_fHdrDisplayMaxNits)
