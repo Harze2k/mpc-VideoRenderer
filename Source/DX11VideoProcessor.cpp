@@ -2429,84 +2429,81 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         }
     }
 
-    HRESULT hr = S_OK;
-    m_FieldDrawn = 0;
-    bool updateStats = false;
-    m_hdr10 = {};
-    m_Dovi.bValid = false; // Ensure DoVi is reset for every sample initially
-    size_t sdSize = 0;
-    if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
-    {
-        // --- HDR10 metadata ---
-        const MediaSideDataHDR* hdr = nullptr;
-        hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, reinterpret_cast<const BYTE**>(&hdr), &sdSize);
-        if (SUCCEEDED(hr) && sdSize == sizeof(MediaSideDataHDR) && hdr)
-        {
-            // TODO: copy hdr fields into your m_hdr10, set m_hdr10.bValid = true, etc.
-        }
+m_hdr10 = {};
+m_Dovi.bValid = false; // reset DoVi every sample
 
-        // --- 3D offset metadata ---
-        const MediaSideData3DOffset* offset = nullptr;
-        hr = pMediaSideData->GetSideData(IID_MediaSideData3DOffset, reinterpret_cast<const BYTE**>(&offset), &sdSize);
-        if (SUCCEEDED(hr) && sdSize == sizeof(MediaSideData3DOffset) && offset && offset->offset_count > 0 && offset->offset[0] != 0)
-        {
-            // TODO: handle 3D offsets if you need them
-        }
-    }
-    MediaSideDataHDR* hdr = nullptr;
-    //size_t size = 0;
-    hr = pMediaSideData->GetSideData(IID_MediaSideDataHDR, (const BYTE**)&hdr, &sdSize);
-    if (SUCCEEDED(hr) && &sdSize == sizeof(MediaSideDataHDR))
+if (CComQIPtr<IMediaSideData> pMediaSideData = pSample)
+{
+    HRESULT hrLocal = S_OK;
+    size_t size = 0;
+
+    // --- HDR10 mastering metadata ---
+    const MediaSideDataHDR* hdr = nullptr;
+    size = 0;
+    hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDR,reinterpret_cast<const BYTE**>(&hdr), &size);
+    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDR) && hdr)
     {
         m_hdr10.timestamp = tick;
-        m_hdr10.bValid = true;
-        updateStats = true;
+        bool valid = false;
 
-        // fill m_hdr10 fields exactly as before...
-        const auto& primaries_x = hdr->display_primaries_x;
-        const auto& primaries_y = hdr->display_primaries_y;
-        if (primaries_x[0] > 0. && primaries_x[1] > 0. && primaries_x[2] > 0.
-            && primaries_y[0] > 0. && primaries_y[1] > 0. && primaries_y[2] > 0.
-            && hdr->white_point_x > 0. && hdr->white_point_y > 0.
-            && hdr->max_display_mastering_luminance > 0. && hdr->min_display_mastering_luminance >= 0.)
+        const auto& px = hdr->display_primaries_x;
+        const auto& py = hdr->display_primaries_y;
+        if (px[0] > 0.f && px[1] > 0.f && px[2] > 0.f &&
+            py[0] > 0.f && py[1] > 0.f && py[2] > 0.f &&
+            hdr->white_point_x > 0.f && hdr->white_point_y > 0.f &&
+            hdr->max_display_mastering_luminance > 0.f &&
+            hdr->min_display_mastering_luminance >= 0.f)
         {
-            m_hdr10.hdr10.RedPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[2] * 50000.0));
-            m_hdr10.hdr10.RedPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[2] * 50000.0));
-            m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(primaries_x[0] * 50000.0));
-            m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(primaries_y[0] * 50000.0));
-            m_hdr10.hdr10.BluePrimary[0] = static_cast<UINT16>(std::lround(primaries_x[1] * 50000.0));
-            m_hdr10.hdr10.BluePrimary[1] = static_cast<UINT16>(std::lround(primaries_y[1] * 50000.0));
-            m_hdr10.hdr10.WhitePoint[0] = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
-            m_hdr10.hdr10.WhitePoint[1] = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
+            valid = true;
+
+            // SMPTExy (0..1) -> SMPTE integer coding (0..50000)
+            m_hdr10.hdr10.RedPrimary[0]   = static_cast<UINT16>(std::lround(px[2] * 50000.0));
+            m_hdr10.hdr10.RedPrimary[1]   = static_cast<UINT16>(std::lround(py[2] * 50000.0));
+            m_hdr10.hdr10.GreenPrimary[0] = static_cast<UINT16>(std::lround(px[0] * 50000.0));
+            m_hdr10.hdr10.GreenPrimary[1] = static_cast<UINT16>(std::lround(py[0] * 50000.0));
+            m_hdr10.hdr10.BluePrimary[0]  = static_cast<UINT16>(std::lround(px[1] * 50000.0));
+            m_hdr10.hdr10.BluePrimary[1]  = static_cast<UINT16>(std::lround(py[1] * 50000.0));
+            m_hdr10.hdr10.WhitePoint[0]   = static_cast<UINT16>(std::lround(hdr->white_point_x * 50000.0));
+            m_hdr10.hdr10.WhitePoint[1]   = static_cast<UINT16>(std::lround(hdr->white_point_y * 50000.0));
 
             m_hdr10.hdr10.MaxMasteringLuminance = static_cast<UINT>(std::lround(hdr->max_display_mastering_luminance));
-            m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(
-                hdr->min_display_mastering_luminance * 10000.0));
+            m_hdr10.hdr10.MinMasteringLuminance = static_cast<UINT>(std::lround(hdr->min_display_mastering_luminance * 10000.0));
         }
+
+        m_hdr10.bValid = valid;
+        if (valid) { updateStats = true; }
     }
 
-    MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
+    // --- Content Light Level ---
+    const MediaSideDataHDRContentLightLevel* hdrCLL = nullptr;
     size = 0;
-    hr = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel, (const BYTE**)&hdrCLL, &size);
-    if (SUCCEEDED(hr) && size == sizeof(MediaSideDataHDRContentLightLevel))
+    hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataHDRContentLightLevel,
+                                          reinterpret_cast<const BYTE**>(&hdrCLL), &size);
+    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataHDRContentLightLevel) && hdrCLL)
     {
-        m_hdr10.hdr10.MaxContentLightLevel = hdrCLL->MaxCLL;
-        m_hdr10.hdr10.MaxFrameAverageLightLevel = hdrCLL->MaxFALL;
+        m_hdr10.hdr10.MaxContentLightLevel        = hdrCLL->MaxCLL;
+        m_hdr10.hdr10.MaxFrameAverageLightLevel   = hdrCLL->MaxFALL;
     }
 
-    //size_t size = 0;
-    MediaSideData3DOffset* offset = nullptr;
-    hr = pMediaSideData->GetSideData(IID_MediaSideData3DOffset, (const BYTE**)&offset, &sdSize);
-    if (SUCCEEDED(hr) && &sdSize == sizeof(MediaSideData3DOffset) && offset->offset_count > 0 && offset->offset[0])
+    // --- 3D subtitle offset ---
+    const MediaSideData3DOffset* offset = nullptr;
+    size = 0;
+    hrLocal = pMediaSideData->GetSideData(IID_MediaSideData3DOffset,
+                                          reinterpret_cast<const BYTE**>(&offset), &size);
+    if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideData3DOffset) && offset &&
+        offset->offset_count > 0 && offset->offset[0] != 0)
     {
         m_nStereoSubtitlesOffsetInPixels = offset->offset[0];
     }
 
+    // --- Dolby Vision (optional) ---
     if (m_srcParams.CSType == CS_YUV && (m_bHdrPreferDoVi || !SourceIsPQorHLG()))
     {
-        MediaSideDataDOVIMetadata* pDOVIMetadata = nullptr;
-        hr = pMediaSideData->GetSideData(IID_MediaSideDataDOVIMetadata, (const BYTE**)&pDOVIMetadata, &size);
-        if (SUCCEEDED(hr) && size == sizeof(MediaSideDataDOVIMetadata) && CheckDoviMetadata(pDOVIMetadata, 1))
+        const MediaSideDataDOVIMetadata* pDOVI = nullptr;
+        size = 0;
+        hrLocal = pMediaSideData->GetSideData(IID_MediaSideDataDOVIMetadata,
+                                              reinterpret_cast<const BYTE**>(&pDOVI), &size);
+        if (SUCCEEDED(hrLocal) && size == sizeof(MediaSideDataDOVIMetadata) && CheckDoviMetadata(pDOVI, 1))
         {
             const bool bYCCtoRGBChanged = !m_PSConvColorData.bEnable ||
             (memcmp(
@@ -2626,9 +2623,6 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
             }
         }
     }
-    //}
-
-
     // ---- START OF NEW LOGIC ----
     // Determine HDR/SDR by transfer function or side data (does not depend on user flags)
     const bool srcTFisHDR = (m_srcExFmt.VideoTransferFunction == MFVideoTransFunc_2084) ||
