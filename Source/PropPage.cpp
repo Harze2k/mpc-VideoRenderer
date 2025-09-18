@@ -30,6 +30,7 @@ if (uMsg == WM_MVR_HDR_AUTOSWAP_UI) {
 
 #include "stdafx.h"
 #include "VideoRenderer.h"
+#include "AutoSwapLog.h"
 #include "resource.h"
 #include "Helper.h"
 #include "DisplayConfig.h"
