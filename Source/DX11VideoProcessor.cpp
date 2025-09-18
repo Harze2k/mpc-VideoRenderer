@@ -1626,7 +1626,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 
 	ReleaseVP();
 	m_activeHdrMode = HdrMode::UNKNOWN; // Reset on every init
-	AutoSwapLog(L\"InitMediaType: reset activeHdr; settings pass=%d localTM=%d type=%d\", (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
+	AutoSwapLog(L"InitMediaType: reset activeHdr; settings pass=%d localTM=%d type=%d", (int)m_bHdrPassthrough, (int)m_bHdrLocalToneMapping, (int)m_iHdrLocalToneMappingType);
 
 	auto FmtParams = GetFmtConvParams(pmt);
 
@@ -1841,7 +1841,7 @@ BOOL CDX11VideoProcessor::InitMediaType(const CMediaType* pmt)
 
 		const auto bHdrOutput = m_bHdrSupport && (m_bHdrPassthrough || m_bHdrLocalToneMapping) && (SourceIsHDR() || m_bVPUseRTXVideoHDR);
 		m_activeHdrMode = bHdrOutput ? HdrMode::HDR : HdrMode::SDR;
-	AutoSwapLog(L\"InitMediaType: pipeline set to %s (bHdrOutput=%d; TF=%d)\", (m_activeHdrMode==HdrMode::HDR?L\"HDR\":L\"SDR\"), (int)bHdrOutput, (int)m_srcExFmt.VideoTransferFunction);
+	AutoSwapLog(L"InitMediaType: pipeline set to %s (bHdrOutput=%d; TF=%d)", (m_activeHdrMode==HdrMode::HDR?L"HDR":L"SDR"), (int)bHdrOutput, (int)m_srcExFmt.VideoTransferFunction);
 		DLog(L"CDX11VideoProcessor::InitMediaType() - Pipeline configured for: %s", (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"));
 
 		return TRUE;
@@ -2295,7 +2295,7 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
     }
 
     if (needSwap) {
-        AutoSwapLog(L\"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d\", detectedHDR?L\"HDR\":L\"SDR\", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
+        AutoSwapLog(L"CopySample: Auto-swap trigger. Content=%s, current: pass=%d localTM=%d type=%d", detectedHDR?L"HDR":L"SDR", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
         if (!detectedHDR) {
             curSets.bHdrPassthrough = true;
             curSets.bHdrLocalToneMapping = false;
@@ -2305,13 +2305,13 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
             curSets.iHdrLocalToneMappingType = 1; // ACES
         }
         m_pFilter->SetSettings(curSets);
-        AutoSwapLog(L\"CopySample: Settings applied. New: pass=%d localTM=%d type=%d\", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
+        AutoSwapLog(L"CopySample: Settings applied. New: pass=%d localTM=%d type=%d", (int)curSets.bHdrPassthrough, (int)curSets.bHdrLocalToneMapping, (int)curSets.iHdrLocalToneMappingType);
         // Notify UI if open
         PostMessage(HWND_BROADCAST, GetAutoSwapUiMsg(), (WPARAM)(detectedHDR ? 1 : 0), 0);
         // Force graph to rebuild
         m_activeHdrMode = HdrMode::UNKNOWN;
         m_pFilter->TriggerMediaTypeChange();
-        AutoSwapLog(L\"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline\");
+        AutoSwapLog(L"CopySample: TriggerMediaTypeChange() called; returning E_ABORT to restart pipeline");
         return E_ABORT;
     }
 
@@ -2320,10 +2320,10 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
         HdrMode detectedMode = detectedHDR ? HdrMode::HDR : HdrMode::SDR;
         if (m_activeHdrMode != detectedMode)
         {
-            DLog(L\"CDX11VideoProcessor::CopySample() - Mismatch! Pipeline is %s but content is %s. Triggering re-init.\",
-                (m_activeHdrMode == HdrMode::HDR ? L\"HDR\" : L\"SDR\"),
-                (detectedMode == HdrMode::HDR ? L\"HDR\" : L\"SDR\"));
-            AutoSwapLog(L\"CopySample: Pipeline/content mismatch: pipeline=%s content=%s\", m_activeHdrMode==HdrMode::HDR?L\"HDR\":L\"SDR\", detectedHDR?L\"HDR\":L\"SDR\");
+            DLog(L"CDX11VideoProcessor::CopySample() - Mismatch! Pipeline is %s but content is %s. Triggering re-init.",
+                (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"),
+                (detectedMode == HdrMode::HDR ? L"HDR" : L"SDR"));
+            AutoSwapLog(L"CopySample: Pipeline/content mismatch: pipeline=%s content=%s", m_activeHdrMode==HdrMode::HDR?L"HDR":L"SDR", detectedHDR?L"HDR":L"SDR");
 // Set to UNKNOWN
  to prevent triggering on every subsequent frame before re-init completes.
             m_activeHdrMode = HdrMode::UNKNOWN;
