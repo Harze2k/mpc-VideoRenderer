@@ -64,7 +64,7 @@ protected:
 	bool m_bHdrPreferDoVi                  = false;
 	bool m_bHdrPassthrough                 = false;
 	bool m_bHdrLocalToneMapping            = true;
-	int  m_iHdrLocalToneMappingType		   = 0;
+	int  m_iHdrLocalToneMappingType		   = 1;
 	float m_fHdrDisplayMaxNits             = 1000.0f;
 	int  m_iHdrToggleDisplay               = HDRTD_Disabled;
 	int  m_iHdrOsdBrightness               = 0;

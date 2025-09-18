@@ -2282,6 +2282,33 @@ HRESULT CDX11VideoProcessor::CopySample(IMediaSample* pSample)
                 (m_activeHdrMode == HdrMode::HDR ? L"HDR" : L"SDR"),
                 (detectedMode == HdrMode::HDR ? L"HDR" : L"SDR"));
 
+
+// Auto-swap renderer selection based on first-frame HDR presence.
+// If we detected SDR: force "Passthrough to display" (combo item data 0).
+// If we detected HDR: force "Local: ACES" (combo item data 1).
+if (auto pFilter = m_pFilter) {
+    Settings_t curSets;
+    pFilter->GetSettings(curSets);
+    if (detectedMode == HdrMode::SDR) {
+        // SDR: passthrough on, local tone mapping off.
+        if (!curSets.bHdrPassthrough || curSets.bHdrLocalToneMapping) {
+            curSets.bHdrPassthrough = true;
+            curSets.bHdrLocalToneMapping = false;
+            // Keep last mapping type but it's irrelevant in SDR; don't persist change unless needed.
+            pFilter->SetSettings(curSets);
+            DLog(L\"Applied SDR auto-swap: Passthrough to display.\");
+        }
+    } else { // HDR detected
+        // HDR: default to Local: ACES (type == 1)
+        if (!curSets.bHdrLocalToneMapping || curSets.iHdrLocalToneMappingType != 1 || curSets.bHdrPassthrough) {
+            curSets.bHdrPassthrough = false;
+            curSets.bHdrLocalToneMapping = true;
+            curSets.iHdrLocalToneMappingType = 1;
+            pFilter->SetSettings(curSets);
+            DLog(L\"Applied HDR auto-swap: Local: ACES.\");
+        }
+    }
+}
             // Set to UNKNOWN to prevent triggering on every subsequent frame before re-init completes.
             m_activeHdrMode = HdrMode::UNKNOWN;
             m_pFilter->TriggerMediaTypeChange();

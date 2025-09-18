@@ -34,7 +34,7 @@ class CDX9VideoProcessor
 	: public CVideoProcessor
 {
 private:
-	// Direct3D 9
+	//Direct3D 9
 	CComPtr<IDirect3D9Ex>            m_pD3DEx;
 	CComPtr<IDirect3DDevice9Ex>      m_pD3DDevEx;
 	CComPtr<IDirect3DDeviceManager9> m_pD3DDeviceManager;
