@@ -1,0 +1,8 @@
+{
+    "C_Cpp.errorSquiggles": "enabled",
+    "editor.mouseWheelZoom": true,
+    "editor.fontSize": 14,
+    "[powershell]": {
+        "editor.wordSeparators": "`~!@#%^&*()=+[{]}\\\\|;:'\\\",.<>/?"
+    }
+}

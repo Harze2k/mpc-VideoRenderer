@@ -127,7 +127,7 @@ float4 main(PS_INPUT input) : SV_Target {
     uint sel = selection;
     sel = (sel < 1u || sel > 5u) ? 1u : sel; // sanitize: default to ACES
 
-    [unroll] switch (sel) {
+    switch (sel) {
     case 5u: // Enhanced ACES
         toneMapped = EnhancedACESTonemap(linearColor.rgb);
         break;

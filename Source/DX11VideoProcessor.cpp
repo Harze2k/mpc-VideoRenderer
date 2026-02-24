@@ -1109,7 +1109,7 @@ HRESULT CDX11VideoProcessor::SetShaderDoviCurvesPoly()
 
     return hr;
 }
-
+HRESULT CDX11VideoProcessor::Render(int field, REFERENCE_TIME frameStartTime);
 HRESULT CDX11VideoProcessor::SetShaderDoviCurves()
 {
     ASSERT(m_Dovi.bValid);

@@ -372,7 +372,7 @@ void CDX9VideoProcessor::DeviceThreadFunc()
 			}
 	}
 }
-
+HRESULT CDX11VideoProcessor::Render(int field, REFERENCE_TIME frameStartTime);
 HRESULT CDX9VideoProcessor::InitInternal(bool* pChangeDevice/* = nullptr*/)
 {
 	DLog(L"CDX9VideoProcessor::InitInternal()");
@@ -1276,8 +1276,6 @@ HRESULT CDX9VideoProcessor::ProcessSample(IMediaSample* pSample)
 		m_RenderStats.failed++;
 		return hr;
 	}
-
-	// always Render(1) a frame after CopySample()
 	hr = Render(1, rtStart);
 	m_pFilter->m_DrawStats.Add(GetPreciseTick());
 	if (m_pFilter->m_filterState == State_Running) {
@@ -1297,27 +1295,21 @@ HRESULT CDX9VideoProcessor::ProcessSample(IMediaSample* pSample)
 			m_RenderStats.dropped2++;
 			return S_FALSE; // skip frame
 		}
-
 		rtStart += rtFrameDur / 2;
-
 		hr = Render(2, rtStart);
 		m_pFilter->m_DrawStats.Add(GetPreciseTick());
 		if (m_pFilter->m_filterState == State_Running) {
 			m_pFilter->StreamTime(rtClock);
 		}
-
 		m_RenderStats.syncoffset = rtClock - rtStart;
-
 		so = (int)std::clamp(m_RenderStats.syncoffset, -UNITS, UNITS);
 #if SYNC_OFFSET_EX
 		m_SyncDevs.Add(so - m_Syncs.Last());
 #endif
 		m_Syncs.Add(so);
 	}
-
 	return hr;
 }
-
 HRESULT CDX9VideoProcessor::CopySample(IMediaSample* pSample)
 {
 	uint64_t tick = GetPreciseTick();
